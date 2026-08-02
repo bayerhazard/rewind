@@ -18,11 +18,14 @@ spec:
     spec:
       containers:
         - name: rewind
-          image: ghcr.io/bayerhazard/rewind:1.0.14
+          image: ghcr.io/bayerhazard/rewind:1.0.15
           imagePullPolicy: Always
           ports:
             - containerPort: 8765
               protocol: TCP
+          env:
+            - name: EXPORT_SCHEDULE
+              value: {{ .Values.exportSchedule | default "03:00" | quote }}
           volumeMounts:
             - name: appdata
               mountPath: /Data/Backup

@@ -8,3 +8,5 @@ userspace:
     permission: readWrite
 
 olaresEnv: {}
+
+exportSchedule: "03:00"

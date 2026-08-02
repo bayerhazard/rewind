@@ -488,9 +488,13 @@ tr:last-child td { border-bottom: none; }
     </div>
 
     <div class="btn-group">
-      <button class="btn primary" id="btn-export-config" onclick="doExport('config')">
+      <button class="btn primary" id="btn-export-config" onclick="doExport()">
          Config-Export starten
       </button>
+    </div>
+
+    <div id="schedule-info" style="margin-top: 16px; font-size: 13px; color: var(--text-dim);">
+      Automatischer Export wird geladen...
     </div>
 
     <div class="card" style="margin-top: 20px;">
@@ -899,6 +903,16 @@ async function doExport() {
   }
 }
 
+async function loadSchedule() {
+  const el = document.getElementById('schedule-info');
+  if (!el) return;
+  const s = await apiGet('/api/export/schedule');
+  if (!s) { el.textContent = 'Automatischer Export: nicht verfügbar'; return; }
+  const next = s.next ? new Date(s.next).toLocaleString('de-DE', { timeZone: 'UTC' }) + ' UTC' : '—';
+  const last = s.last_auto ? new Date(s.last_auto).toLocaleString('de-DE', { timeZone: 'UTC' }) + ' UTC' : 'noch nie';
+  el.innerHTML = `Automatischer Export: täglich um <strong>${s.scheduled}</strong> UTC · Nächster Lauf: <strong>${next}</strong> · Letzter Auto-Lauf: ${last}`;
+}
+
 // --- Analysis ---
 async function doAnalysis() {
   const result = await apiGet('/api/analysis');
@@ -1070,12 +1084,14 @@ async function confirmRestore() {
 // --- Init ---
 (async function init() {
   await loadOverview();
+  await loadSchedule();
 
   // Auto-refresh alle 60 Sekunden
   setInterval(async () => {
     const activeTab = document.querySelector('.tab.active');
     if (activeTab?.dataset.tab === 'overview') await loadOverview();
     if (activeTab?.dataset.tab === 'analysis') loadAnalysis();
+    await loadSchedule();
   }, 60000);
 })();
 </script>

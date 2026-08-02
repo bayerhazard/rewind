@@ -19,7 +19,7 @@ import threading
 import time
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # --- Config ------------------------------------------------------------------
 DEFAULT_PORT = 8765
@@ -27,11 +27,20 @@ OLARES_CLI = "olares-cli"
 BACKUP_DIR = "/Data/Backup"
 CONFIG_DIR = f"{BACKUP_DIR}/config"
 
+# Täglicher automatischer Export (UTC, HH:MM). Überschreibbar via Env EXPORT_SCHEDULE.
+EXPORT_SCHEDULE = os.environ.get("EXPORT_SCHEDULE", "03:00")
+
 last_export = {
     "config": None,
     "status": "idle"
 }
 export_lock = threading.Lock()
+
+schedule_state = {
+    "scheduled": EXPORT_SCHEDULE,
+    "next": None,
+    "last_auto": None
+}
 
 # --- Helpers -----------------------------------------------------------------
 def run_cmd(command, timeout=60):
@@ -186,6 +195,39 @@ def trigger_export():
     t = threading.Thread(target=_run_export_background, daemon=True)
     t.start()
     return {"status": "started", "message": "Config-Export läuft im Hintergrund (mehrere Minuten)"}
+
+
+# --- Täglicher Auto-Export (In-App-Cron) ------------------------------------
+def _next_run_time(hhmm):
+    now = datetime.now(timezone.utc)
+    try:
+        h, m = hhmm.split(":")
+        target = now.replace(hour=int(h), minute=int(m), second=0, microsecond=0)
+    except (ValueError, AttributeError):
+        target = now.replace(hour=3, minute=0, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    return target
+
+
+def _scheduler_loop():
+    while True:
+        nxt = _next_run_time(EXPORT_SCHEDULE)
+        with export_lock:
+            schedule_state["next"] = nxt.isoformat()
+        sleep_secs = (nxt - datetime.now(timezone.utc)).total_seconds()
+        if sleep_secs > 0:
+            time.sleep(sleep_secs)
+        # Täglichen Export anstoßen (asynchron)
+        try:
+            res = trigger_export()
+            if res.get("status") in ("started", "running"):
+                with export_lock:
+                    schedule_state["last_auto"] = datetime.now(timezone.utc).isoformat()
+        except Exception as e:
+            print(f"[scheduler] export trigger failed: {e}", flush=True)
+        # Kurz pausieren, damit der nächste Zyklus nicht sofort doppelt triggert
+        time.sleep(30)
 
 # --- Restore -----------------------------------------------------------------
 def read_export_json(date_str, rel_path):
@@ -342,6 +384,8 @@ class BackupHandler(BaseHTTPRequestHandler):
                 self.send_json({"apps": list_export_apps(date_str)} if date_str else {"error": "Missing 'date'"}, 400 if not date_str else 200)
             elif path == "/api/export/status":
                 self.send_json(last_export)
+            elif path == "/api/export/schedule":
+                self.send_json(schedule_state)
             elif path == "/":
                 html_path = "/app/backup-manager.html"
                 if os.path.exists(html_path):
@@ -409,6 +453,12 @@ def main():
     args = parser.parse_args()
 
     server = ThreadingHTTPServer(("0.0.0.0", args.port), BackupHandler)
+
+    # Täglicher Auto-Export starten
+    scheduler = threading.Thread(target=_scheduler_loop, daemon=True)
+    scheduler.start()
+    print(f"  Auto-Export: täglich um {EXPORT_SCHEDULE} UTC")
+
     print("=" * 60)
     print("  Rewind — Olares Backup Supplement")
     print("=" * 60)
