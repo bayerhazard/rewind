@@ -1,4 +1,4 @@
-FROM ghcr.io/bayerhazard/rewind:1.0.10
+FROM ghcr.io/bayerhazard/rewind:1.0.15
 WORKDIR /app
 COPY backup-manager.html /app/backup-manager.html
 COPY backup-manager.py /app/backup-manager.py

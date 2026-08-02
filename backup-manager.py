@@ -20,6 +20,7 @@ import time
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 
 # --- Config ------------------------------------------------------------------
 DEFAULT_PORT = 8765
@@ -27,20 +28,25 @@ OLARES_CLI = "olares-cli"
 BACKUP_DIR = "/Data/Backup"
 CONFIG_DIR = f"{BACKUP_DIR}/config"
 
-# Täglicher automatischer Export (UTC, HH:MM). Überschreibbar via Env EXPORT_SCHEDULE.
-EXPORT_SCHEDULE = os.environ.get("EXPORT_SCHEDULE", "03:00")
+# Zeitzone für die Uhrzeit-Eingabe (MEZ/MESZ = Europe/Berlin)
+SCHEDULE_TZ = ZoneInfo("Europe/Berlin")
+
+# Täglicher automatischer Export. Startwert aus Env EXPORT_SCHEDULE (HH:MM in Europe/Berlin),
+# zur Laufzeit via /api/export/schedule änderbar (GUI).
+schedule_state = {
+    "scheduled": os.environ.get("EXPORT_SCHEDULE", "03:00"),
+    "tz": "Europe/Berlin",
+    "next": None,
+    "next_local": None,
+    "last_auto": None,
+    "last_auto_local": None
+}
 
 last_export = {
     "config": None,
     "status": "idle"
 }
 export_lock = threading.Lock()
-
-schedule_state = {
-    "scheduled": EXPORT_SCHEDULE,
-    "next": None,
-    "last_auto": None
-}
 
 # --- Helpers -----------------------------------------------------------------
 def run_cmd(command, timeout=60):
@@ -199,22 +205,27 @@ def trigger_export():
 
 # --- Täglicher Auto-Export (In-App-Cron) ------------------------------------
 def _next_run_time(hhmm):
-    now = datetime.now(timezone.utc)
+    # HH:MM in Europe/Berlin (MEZ/MESZ) -> nächsten Lauf als UTC-Zeitpunkt
+    now_utc = datetime.now(timezone.utc)
+    now_local = now_utc.astimezone(SCHEDULE_TZ)
     try:
         h, m = hhmm.split(":")
-        target = now.replace(hour=int(h), minute=int(m), second=0, microsecond=0)
+        target_local = now_local.replace(hour=int(h), minute=int(m), second=0, microsecond=0)
     except (ValueError, AttributeError):
-        target = now.replace(hour=3, minute=0, second=0, microsecond=0)
-    if target <= now:
-        target += timedelta(days=1)
-    return target
+        target_local = now_local.replace(hour=3, minute=0, second=0, microsecond=0)
+    if target_local <= now_local:
+        target_local += timedelta(days=1)
+    return target_local.astimezone(timezone.utc)
 
 
 def _scheduler_loop():
     while True:
-        nxt = _next_run_time(EXPORT_SCHEDULE)
+        with export_lock:
+            hhmm = schedule_state["scheduled"]
+        nxt = _next_run_time(hhmm)
         with export_lock:
             schedule_state["next"] = nxt.isoformat()
+            schedule_state["next_local"] = nxt.astimezone(SCHEDULE_TZ).isoformat()
         sleep_secs = (nxt - datetime.now(timezone.utc)).total_seconds()
         if sleep_secs > 0:
             time.sleep(sleep_secs)
@@ -223,7 +234,9 @@ def _scheduler_loop():
             res = trigger_export()
             if res.get("status") in ("started", "running"):
                 with export_lock:
-                    schedule_state["last_auto"] = datetime.now(timezone.utc).isoformat()
+                    now = datetime.now(timezone.utc)
+                    schedule_state["last_auto"] = now.isoformat()
+                    schedule_state["last_auto_local"] = now.astimezone(SCHEDULE_TZ).isoformat()
         except Exception as e:
             print(f"[scheduler] export trigger failed: {e}", flush=True)
         # Kurz pausieren, damit der nächste Zyklus nicht sofort doppelt triggert
@@ -431,6 +444,25 @@ class BackupHandler(BaseHTTPRequestHandler):
             if path == "/api/export/config":
                 self.send_json(trigger_export())
 
+            elif path == "/api/export/schedule":
+                t = (data.get("time") or "").strip()
+                import re
+                if not re.fullmatch(r"\d{1,2}:\d{2}", t):
+                    self.send_json({"error": "Ungültiges Zeitformat (erwartet HH:MM, z.B. 02:00)"}, 400)
+                    return
+                h, m = t.split(":")
+                if not (0 <= int(h) <= 23 and 0 <= int(m) <= 59):
+                    self.send_json({"error": "Ungültige Zeit (erwartet HH:MM, z.B. 02:00)"}, 400)
+                    return
+                with export_lock:
+                    schedule_state["scheduled"] = f"{int(h):02d}:{int(m):02d}"
+                # Nächsten Lauf sofort neu berechnen
+                nxt = _next_run_time(schedule_state["scheduled"])
+                with export_lock:
+                    schedule_state["next"] = nxt.isoformat()
+                    schedule_state["next_local"] = nxt.astimezone(SCHEDULE_TZ).isoformat()
+                self.send_json(schedule_state)
+
             elif path == "/api/restore":
                 date_str = data.get("date", "")
                 apps = data.get("apps")
@@ -457,7 +489,7 @@ def main():
     # Täglicher Auto-Export starten
     scheduler = threading.Thread(target=_scheduler_loop, daemon=True)
     scheduler.start()
-    print(f"  Auto-Export: täglich um {EXPORT_SCHEDULE} UTC")
+    print(f"  Auto-Export: täglich um {schedule_state['scheduled']} (Europe/Berlin)")
 
     print("=" * 60)
     print("  Rewind — Olares Backup Supplement")

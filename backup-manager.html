@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rewind — Olares Backup Supplement</title>
+<link rel="icon" type="image/png" href="logo.png">
 <style>
 :root {
   --bg: #0f1117;
@@ -493,8 +494,17 @@ tr:last-child td { border-bottom: none; }
       </button>
     </div>
 
-    <div id="schedule-info" style="margin-top: 16px; font-size: 13px; color: var(--text-dim);">
-      Automatischer Export wird geladen...
+    <div id="schedule-box" style="margin-top: 16px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);">
+      <div style="font-weight: 600; margin-bottom: 8px;"> Automatischer täglicher Export</div>
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <label style="font-size: 13px;">Uhrzeit (MEZ/MESZ):</label>
+        <input type="time" id="schedule-time" value="03:00" step="60"
+               style="background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 14px;">
+        <button class="btn" id="btn-save-schedule" onclick="saveSchedule()"> Speichern</button>
+      </div>
+      <div id="schedule-info" style="margin-top: 10px; font-size: 13px; color: var(--text-dim);">
+        Automatischer Export wird geladen...
+      </div>
     </div>
 
     <div class="card" style="margin-top: 20px;">
@@ -908,9 +918,27 @@ async function loadSchedule() {
   if (!el) return;
   const s = await apiGet('/api/export/schedule');
   if (!s) { el.textContent = 'Automatischer Export: nicht verfügbar'; return; }
-  const next = s.next ? new Date(s.next).toLocaleString('de-DE', { timeZone: 'UTC' }) + ' UTC' : '—';
-  const last = s.last_auto ? new Date(s.last_auto).toLocaleString('de-DE', { timeZone: 'UTC' }) + ' UTC' : 'noch nie';
-  el.innerHTML = `Automatischer Export: täglich um <strong>${s.scheduled}</strong> UTC · Nächster Lauf: <strong>${next}</strong> · Letzter Auto-Lauf: ${last}`;
+  const inp = document.getElementById('schedule-time');
+  if (inp && !inp.dataset.dirty) inp.value = s.scheduled;
+  const next = (s.next_local || '').slice(0, 16).replace('T', ' ') || '—';
+  const last = (s.last_auto_local || '').slice(0, 16).replace('T', ' ') || 'noch nie';
+  el.innerHTML = `Täglich um <strong>${s.scheduled}</strong> Uhr (MEZ/MESZ) · Nächster Lauf: <strong>${next}</strong> · Letzter Auto-Lauf: ${last}`;
+}
+
+async function saveSchedule() {
+  const inp = document.getElementById('schedule-time');
+  const btn = document.getElementById('btn-save-schedule');
+  const val = inp?.value || '';
+  if (btn) btn.disabled = true;
+  const res = await apiPost('/api/export/schedule', { time: val });
+  if (res?.error) {
+    alert('Fehler: ' + res.error);
+  } else {
+    if (inp) inp.dataset.dirty = '1';
+    alert(`Zeitplan gespeichert: täglich um ${res.scheduled} Uhr (MEZ/MESZ).`);
+  }
+  if (btn) btn.disabled = false;
+  loadSchedule();
 }
 
 // --- Analysis ---
