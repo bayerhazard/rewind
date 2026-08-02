@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rewind — Olares Backup Supplement</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #232733;
+  --border: #2d3348;
+  --text: #e2e4ea;
+  --text-dim: #8b8fa3;
+  --accent: #6c8cff;
+  --accent-hover: #8aa4ff;
+  --success: #34d399;
+  --success-bg: rgba(52, 211, 153, 0.1);
+  --warning: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.1);
+  --error: #f87171;
+  --error-bg: rgba(248, 113, 113, 0.1);
+  --radius: 10px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 20px;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.header .subtitle {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status-badge.ok { background: var(--success-bg); color: var(--success); }
+.status-badge.warn { background: var(--warning-bg); color: var(--warning); }
+.status-badge.error { background: var(--error-bg); color: var(--error); }
+.status-badge .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: currentColor;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  background: var(--surface);
+  padding: 4px;
+  border-radius: var(--radius);
+}
+
+.tab {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.tab:hover { color: var(--text); background: var(--surface2); }
+.tab.active { background: var(--accent); color: #fff; }
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title .icon { font-size: 18px; }
+
+/* Grid */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.grid-2 {
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+}
+
+/* Stat cards */
+.stat {
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.stat-value.success { color: var(--success); }
+.stat-value.warning { color: var(--warning); }
+.stat-value.error { color: var(--error); }
+.stat-value.info { color: var(--accent); }
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn:hover { border-color: var(--accent); background: rgba(108, 140, 255, 0.1); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: var(--accent-hover); }
+.btn.danger { background: var(--error-bg); border-color: var(--error); color: var(--error); }
+.btn.danger:hover { background: rgba(248, 113, 113, 0.2); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+
+/* Tables */
+.table-wrap { overflow-x: auto; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+tr:last-child td { border-bottom: none; }
+
+/* Tags */
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tag.running { background: var(--success-bg); color: var(--success); }
+.tag.stopped { background: var(--warning-bg); color: var(--warning); }
+.tag.error { background: var(--error-bg); color: var(--error); }
+.tag.failed { background: var(--error-bg); color: var(--error); }
+.tag.completed { background: var(--success-bg); color: var(--success); }
+.tag.info { background: rgba(108, 140, 255, 0.1); color: var(--accent); }
+
+/* Progress */
+.progress-bar {
+  height: 6px;
+  background: var(--surface2);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.progress-fill.success { background: var(--success); }
+.progress-fill.warning { background: var(--warning); }
+.progress-fill.error { background: var(--error); }
+.progress-fill.loading {
+  background: linear-gradient(90deg, var(--accent), #a78bfa, var(--accent));
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Log output */
+.log {
+  background: #0a0c10;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.8;
+  max-height: 400px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log .line { color: var(--text-dim); }
+.log .line.ok { color: var(--success); }
+.log .line.err { color: var(--error); }
+.log .line.warn { color: var(--warning); }
+
+/* Modal */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-overlay.active { display: flex; }
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal h3 {
+  font-size: 18px;
+  margin-bottom: 16px;
+}
+
+.modal .form-group {
+  margin-bottom: 16px;
+}
+
+.modal label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.modal select, .modal input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.modal select:focus, .modal input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+/* Alert */
+.alert {
+  padding: 14px 18px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.alert.info { background: rgba(108, 140, 255, 0.1); border-left: 3px solid var(--accent); }
+.alert.success { background: var(--success-bg); border-left: 3px solid var(--success); }
+.alert.warning { background: var(--warning-bg); border-left: 3px solid var(--warning); }
+.alert.error { background: var(--error-bg); border-left: 3px solid var(--error); }
+
+/* Loading spinner */
+.spinner {
+  display: inline-block;
+  width: 16px; height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Responsive */
+@media (max-width: 600px) {
+  .grid { grid-template-columns: 1fr; }
+  .grid-2 { grid-template-columns: 1fr; }
+  .header { flex-direction: column; gap: 12px; align-items: flex-start; }
+  .tabs { flex-wrap: wrap; }
+  .tab { flex: none; min-width: 80px; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>Rewind</h1>
+      <div class="subtitle">Backup-Supplement für Olares One (Settings & DBs)</div>
+    </div>
+    <div id="connectionStatus" class="status-badge ok">
+      <span class="dot"></span>
+      <span>Running</span>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="overview"> Übersicht</button>
+    <button class="tab" data-tab="backups"> Backups</button>
+    <button class="tab" data-tab="export"> Export</button>
+    <button class="tab" data-tab="restore"> Restore</button>
+  </div>
+
+  <!-- Tab: Overview -->
+  <div id="tab-overview" class="tab-content active">
+    <div class="grid">
+      <div class="stat">
+        <div class="stat-label">Olares Version</div>
+        <div class="stat-value info" id="ov-version">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Installierte Apps</div>
+        <div class="stat-value info" id="ov-apps">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Backup-Pläne</div>
+        <div class="stat-value info" id="ov-backups">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Letzter Config-Export</div>
+        <div class="stat-value" id="ov-last-export">—</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 16px;">
+      <div class="card-title"><span class="icon"></span> App-Status</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>App</th>
+              <th>Version</th>
+              <th>State</th>
+              <th>Speicher</th>
+            </tr>
+          </thead>
+          <tbody id="ov-apps-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon"></span> Network</div>
+      <div class="grid grid-2" id="ov-network"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Backups -->
+  <div id="tab-backups" class="tab-content">
+    <div class="card">
+      <div class="card-title"><span class="icon"></span> Olares Backup-Pläne</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Plan</th>
+              <th>Quelle</th>
+              <th>Größe</th>
+              <th>Restore-Größe</th>
+              <th>Status</th>
+              <th>Nächster Lauf</th>
+            </tr>
+          </thead>
+          <tbody id="backup-plans-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon"></span> Config-Exporte</div>
+      <div id="config-exports-list">
+        <p style="color: var(--text-dim);">Lade Export-Liste...</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon"></span> Export-Details (Klicke auf einen Export)</div>
+      <div id="export-details" style="color: var(--text-dim);">Wähle einen Export aus der Liste oben.</div>
+    </div>
+  </div>
+
+  <!-- Tab: Export -->
+  <div id="tab-export" class="tab-content">
+    <div class="alert info">
+      <span></span>
+      <div>
+        <strong>Config-Export:</strong> Sammelt alle App-Settings, Network, VPN, Users, Integrations,
+        GPU, Compute und System-Configs. Die Dateien werden nach <code>/Data/Backup/config/&lt;datum&gt;/</code>
+        geschrieben und vom Olares "Backup Data"-Plan automatisch erfasst.
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn primary" id="btn-export-config" onclick="doExport('config')">
+         Config-Export starten
+      </button>
+      <button class="btn" id="btn-export-db" onclick="doExport('db')">
+         DB-Export starten
+      </button>
+    </div>
+
+    <div class="card" style="margin-top: 20px;">
+      <div class="card-title"><span class="icon"></span> Export-Protokoll</div>
+      <div id="export-log" class="log">Noch keine Exporte gestartet. Klicke oben auf einen Export-Button.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon"></span> Export-Struktur</div>
+      <pre style="color: var(--text-dim); font-size: 13px; line-height: 1.8;">
+/Data/Backup/config/
+├── 2026-08-02/
+│   ├── system/
+│   │   └── olares-info.json
+│   ├── network/
+│   │   ├── reverse-proxy.json
+│   │   ├── frp.json
+│   │   └── overlay.json
+│   ├── vpn/
+│   │   ├── acl.json
+│   │   ├── devices.json
+│   │   ├── ssh.json
+│   │   ├── subroutes.json
+│   │   └── public-domain-policy.json
+│   ├── integration/
+│   │   └── accounts.json
+│   ├── users/
+│   │   └── role.json
+│   ├── search/
+│   │   └── dirs.json
+│   ├── appearance.json
+│   ├── advanced/
+│   │   ├── env.json
+│   │   └── containerd.json
+│   ├── gpu/
+│   │   ├── mode.json
+│   │   └── apps.json
+│   ├── compute/
+│   │   └── settings.json
+│   ├── video/
+│   │   └── settings.json
+│   ├── backup/
+│   │   └── plans.json
+│   ├── restore/
+│   │   └── plans.json
+│   ├── apps/
+│   │   ├── hermesagent/
+│   │   │   ├── env.json
+│   │   │   ├── entrances.json
+│   │   │   ├── domain.json
+│   │   │   └── policy.json
+│   │   ├── vaultwarden/
+│   │   │   ├── env.json
+│   │   │   └── ...
+│   │   └── ... (alle Apps)
+│   └── status/
+│       └── applications.json
+      </pre>
+    </div>
+  </div>
+
+  <!-- Tab: Analysis -->
+  <div id="tab-analysis" class="tab-content">
+    <div class="alert info">
+      <span></span>
+      <div>
+        <strong>Gap-Analyse:</strong> Prüft ob neue Apps installiert wurden, die noch nicht
+        in den Config-Exports enthalten sind, und ob kritische Konfigurationen fehlen.
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn primary" onclick="doAnalysis()"> Analyse starten</button>
+    </div>
+
+    <div id="analysis-result" style="margin-top: 20px;"></div>
+  </div>
+
+  <!-- Tab: Restore -->
+  <div id="tab-restore" class="tab-content">
+    <div class="alert warning">
+      <span></span>
+      <div>
+        <strong>Wichtig:</strong> Ein Restore überschreibt bestehende Daten!
+        Erstelle vor einem Restore unbedingt einen aktuellen Backup.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon"></span> Restore aus Olares Backup</div>
+      <p style="color: var(--text-dim); margin-bottom: 16px;">
+        Wähle den Backup-Plan und Snapshot, der wiederhergestellt werden soll.
+        Der Restore wird in den Olares Settings UI initiiert.
+      </p>
+      <div class="form-group">
+        <label>Backup-Plan</label>
+        <select id="restore-plan" onchange="updateRestoreSnapshots()">
+          <option value="">— Bitte wählen —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Snapshots</label>
+        <select id="restore-snapshot">
+          <option value="">— Bitte Backup-Plan wählen —</option>
+        </select>
+      </div>
+      <div class="btn-group">
+        <button class="btn primary" onclick="doRestore()"> Restore starten</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon"></span> Restore-Protokoll</div>
+      <div id="restore-log" class="log">Noch kein Restore gestartet.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Restore Confirm -->
+<div class="modal-overlay" id="modal-restore">
+  <div class="modal">
+    <h3> Restore bestätigen</h3>
+    <div id="modal-restore-info"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-restore')">Abbrechen</button>
+      <button class="btn danger" onclick="confirmRestore()">Restore bestätigen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Olares Backup Manager — Frontend
+// ============================================================
+
+const API = ''; // Relative URLs — Proxy läuft auf localhost:8765
+
+// --- Tab Navigation ---
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+
+    // Tab-specific loads
+    if (tab.dataset.tab === 'overview') loadOverview();
+    if (tab.dataset.tab === 'backups') loadBackups();
+    if (tab.dataset.tab === 'analysis') loadAnalysis();
+  });
+});
+
+// --- API Helpers ---
+async function apiGet(path) {
+  try {
+    const res = await fetch(API + path);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    console.error('API Error:', e);
+    return null;
+  }
+}
+
+async function apiPost(path, data) {
+  try {
+    const res = await fetch(API + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data || {})
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    console.error('API Error:', e);
+    return { error: e.message };
+  }
+}
+
+// --- Connection ---
+async function showConnectDialog() {
+  // Profile laden
+  const profiles = await apiGet('/api/profiles');
+  const listEl = document.getElementById('profile-list');
+  
+  if (profiles && Array.isArray(profiles) && profiles.length > 0) {
+    listEl.innerHTML = profiles.map(p => `
+      <div style="display:flex;gap:8px;margin-bottom:4px;">
+        <button class="btn" style="flex:1;" onclick="quickConnect('${p.name}')">
+           ${p.name} (${p.host})
+        </button>
+      </div>
+    `).join('');
+  } else {
+    listEl.innerHTML = '<p style="color:var(--text-dim);font-size:12px;">Keine Profile gespeichert.</p>';
+  }
+  
+  document.getElementById('modal-connect').classList.add('active');
+}
+
+async function doConnect() {
+  const name = document.getElementById('conn-name').value.trim();
+  const host = document.getElementById('conn-host').value.trim();
+  const user = document.getElementById('conn-user').value.trim();
+  
+  if (!host) {
+    alert('Bitte Host eingeben.');
+    return;
+  }
+  
+  const btn = document.querySelector('#modal-connect .btn.primary');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Verbinde...';
+  
+  const result = await apiPost('/api/connect', {
+    host: host,
+    ssh_user: user,
+    name: name
+  });
+  
+  if (result?.success) {
+    // Profil speichern
+    await apiPost('/api/profiles/save', {
+      name: name,
+      host: host,
+      ssh_user: user
+    });
+    
+    closeModal('modal-connect');
+    updateConnectionStatus(result);
+    await loadOverview();
+    alert(` Verbunden mit ${result.olares_id || host}`);
+  } else {
+    alert(` Verbindung fehlgeschlagen: ${result?.error || 'Unbekannter Fehler'}`);
+  }
+  
+  btn.disabled = false;
+  btn.innerHTML = 'Verbinden';
+}
+
+async function quickConnect(name) {
+  const result = await apiGet(`/api/profiles/load/${name}`);
+  if (result?.success) {
+    closeModal('modal-connect');
+    const status = await apiGet('/api/status');
+    updateConnectionStatus({
+      success: true,
+      olares_id: status?.version?.olaresId,
+      host: result.host
+    });
+    await loadOverview();
+  } else {
+    alert(` Verbindung fehlgeschlagen: ${result?.error || 'Unbekannter Fehler'}`);
+  }
+}
+
+function updateConnectionStatus(result) {
+  const badge = document.getElementById('connectionStatus');
+  if (result?.success) {
+    badge.className = 'status-badge ok';
+    const id = result.olares_id || result.host || 'Verbunden';
+    badge.innerHTML = `<span class="dot"></span><span>${id}</span>`;
+  } else {
+    badge.className = 'status-badge error';
+    badge.innerHTML = '<span class="dot"></span><span>Getrennt</span>';
+  }
+}
+
+async function checkConnection() {
+  const data = await apiGet('/api/status');
+  const badge = document.getElementById('connectionStatus');
+  if (data && !data.version?.error) {
+    badge.className = 'status-badge ok';
+    const id = data.version?.olaresId || 'Verbunden';
+    badge.innerHTML = `<span class="dot"></span><span>${id}</span>`;
+  } else {
+    badge.className = 'status-badge error';
+    badge.innerHTML = '<span class="dot"></span><span>Getrennt</span>';
+  }
+  return data;
+}
+
+// --- Install ---
+function showInstallDialog() {
+  document.getElementById('install-log').innerHTML = 'Bereit. Klicke auf "Installation starten".';
+  document.getElementById('btn-do-install').disabled = false;
+  document.getElementById('modal-install').classList.add('active');
+}
+
+async function doInstall() {
+  const logEl = document.getElementById('install-log');
+  const btn = document.getElementById('btn-do-install');
+  
+  logEl.innerHTML = '<span class="line">▶ Starte Installation...</span>\n';
+  btn.disabled = true;
+  
+  const result = await apiPost('/api/install', {});
+  
+  if (result?.success) {
+    logEl.innerHTML += `<span class="line ok"> ${result.message}</span>\n`;
+    if (result.log) {
+      result.log.split('\n').forEach(line => {
+        const cls = line.includes('') ? 'ok' : line.includes('⚠') ? 'warn' : 'line';
+        logEl.innerHTML += `<span class="line ${cls}">${line}</span>\n`;
+      });
+    }
+  } else {
+    logEl.innerHTML += `<span class="line err"> ${result?.error || 'Installation fehlgeschlagen'}</span>\n`;
+  }
+  
+  btn.disabled = false;
+}
+
+// --- Overview ---
+async function loadOverview() {
+  const [status, appsData, backups] = await Promise.all([
+    apiGet('/api/status'),
+    apiGet('/api/apps'),
+    apiGet('/api/backups')
+  ]);
+
+  // Version
+  const versionEl = document.getElementById('ov-version');
+  if (status?.version?.osVersion) {
+    versionEl.textContent = status.version.osVersion;
+  } else {
+    versionEl.textContent = 'N/A';
+    versionEl.className = 'stat-value error';
+  }
+
+  // Apps count
+  const apps = Array.isArray(appsData) ? appsData : [];
+  document.getElementById('ov-apps').textContent = apps.length;
+
+  // Backup plans
+  const plans = backups?.plans?.backups || [];
+  document.getElementById('ov-backups').textContent = plans.length;
+
+  // Last export
+  const exportStatus = await apiGet('/api/export/status');
+  const lastExportEl = document.getElementById('ov-last-export');
+  if (exportStatus?.config) {
+    lastExportEl.textContent = exportStatus.config.timestamp?.slice(0, 16).replace('T', ' ');
+    lastExportEl.className = 'stat-value ' + (exportStatus.config.status === 'success' ? 'success' : 'error');
+  } else {
+    lastExportEl.textContent = 'Noch nie';
+    lastExportEl.className = 'stat-value';
+  }
+
+  // Apps table
+  const appsTable = document.getElementById('ov-apps-table');
+  appsTable.innerHTML = apps.map(app => {
+    const name = app.name || app;
+    const version = app.version || '—';
+    const state = app.state || 'unknown';
+    const stateClass = state === 'running' ? 'running' : state === 'stopped' ? 'stopped' : 'error';
+    return `<tr>
+      <td><strong>${name}</strong></td>
+      <td>${version}</td>
+      <td><span class="tag ${stateClass}">${state}</span></td>
+      <td>—</td>
+    </tr>`;
+  }).join('');
+
+  // Network
+  const networkEl = document.getElementById('ov-network');
+  if (status?.network) {
+    networkEl.innerHTML = `
+      <div class="stat">
+        <div class="stat-label">FRP Server</div>
+        <div class="stat-value" style="font-size: 16px;">${status.network.frp_server || '—'}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">FRP Aktiv</div>
+        <div class="stat-value" style="font-size: 16px;">${status.network.enable_frp ? ' Ja' : ' Nein'}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Reverse Proxy</div>
+        <div class="stat-value" style="font-size: 16px;">${status.network.enable_frp ? 'FRP' : '—'}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">External Network</div>
+        <div class="stat-value" style="font-size: 16px;">${status.network.external_network_off ? ' Aus' : ' An'}</div>
+      </div>
+    `;
+  }
+}
+
+// --- Backups ---
+async function loadBackups() {
+  const backups = await apiGet('/api/backups');
+  const plans = backups?.plans?.backups || [];
+
+  // Plans table
+  const table = document.getElementById('backup-plans-table');
+  table.innerHTML = plans.map(plan => {
+    const size = plan.size ? (parseInt(plan.size) / 1048576).toFixed(1) + ' MB' : '—';
+    const restoreSize = plan.restoreSize ? (parseInt(plan.restoreSize) / 1048576).toFixed(0) + ' MB' : '—';
+    const nextBackup = plan.nextBackupTimestamp
+      ? new Date(plan.nextBackupTimestamp * 1000).toLocaleString('de-DE')
+      : '—';
+    const statusClass = plan.status === 'Completed' ? 'completed' : 'error';
+    return `<tr>
+      <td><strong>${plan.name}</strong></td>
+      <td><code>${plan.path}</code></td>
+      <td>${size}</td>
+      <td>${restoreSize}</td>
+      <td><span class="tag ${statusClass}">${plan.status}</span></td>
+      <td>${nextBackup}</td>
+    </tr>`;
+  }).join('');
+
+  // Config exports
+  const exportsList = await apiGet('/api/config');
+  const exportsEl = document.getElementById('config-exports-list');
+  if (exportsList && Array.isArray(exportsList)) {
+    exportsEl.innerHTML = exportsList.map(date => `
+      <div class="stat" style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <strong>${date}</strong>
+          <div style="font-size: 12px; color: var(--text-dim);">Config-Export</div>
+        </div>
+        <button class="btn" onclick="viewExport('${date}')"> Ansehen</button>
+      </div>
+    `).join('');
+  } else {
+    exportsEl.innerHTML = '<p style="color: var(--text-dim);">Keine Config-Exporte gefunden.</p>';
+  }
+
+  // Restore dropdown
+  const planSelect = document.getElementById('restore-plan');
+  planSelect.innerHTML = '<option value="">— Bitte wählen —</option>' +
+    plans.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+}
+
+async function viewExport(date) {
+  const data = await apiGet(`/api/config/${date}`);
+  const result = document.getElementById('export-details');
+  
+  if (!data || data.error) {
+    result.innerHTML = '<div class="alert warning"> Details nicht verfügbar</div>';
+    return;
+  }
+  
+  const manifest = data.manifest || {};
+  const dbManifest = data.db_manifest || {};
+  const totalSize = data.total_size || '—';
+  
+  result.innerHTML = `
+    <div class="grid grid-2">
+      <div class="stat">
+        <div class="stat-label">Datum</div>
+        <div class="stat-value info" style="font-size:18px;">${date}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Gesamtgröße</div>
+        <div class="stat-value info" style="font-size:18px;">${totalSize}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Config-Dateien</div>
+        <div class="stat-value success" style="font-size:18px;">${(manifest.files || []).length}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">DB-Dateien</div>
+        <div class="stat-value success" style="font-size:18px;">${(dbManifest.files || []).length}</div>
+      </div>
+    </div>
+    <div style="margin-top:16px;">
+      <strong> Dateien:</strong>
+      <pre style="color:var(--text-dim);font-size:12px;margin-top:8px;white-space:pre-wrap;">${(data.files || []).map(f => '  ' + f.replace('/Data/Backup/config/' + date + '/', '')).join('\n')}</pre>
+    </div>
+    ${manifest.total_size_human ? `<div style="margin-top:12px;"><strong> Config-Größe:</strong> ${manifest.total_size_human}</div>` : ''}
+    ${dbManifest.total_size_human ? `<div style="margin-top:4px;"><strong> DB-Größe:</strong> ${dbManifest.total_size_human}</div>` : ''}
+  `;
+}
+
+async function loadArchives() {
+  const archives = await apiGet('/api/archives');
+  const listEl = document.getElementById('archives-list');
+  
+  if (!archives || !Array.isArray(archives) || archives.length === 0) {
+    listEl.innerHTML = '<p style="color: var(--text-dim);">Keine Archive gefunden.</p>';
+    return;
+  }
+  
+  listEl.innerHTML = archives.map(a => {
+    const sizeMB = (a.size / 1048576).toFixed(1);
+    return `
+      <div class="stat" style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <strong> backup-${a.date}.tar.gz</strong>
+          <div style="font-size: 12px; color: var(--text-dim);">${sizeMB} MB</div>
+        </div>
+        <button class="btn" onclick="viewArchive('${a.date}')"> Manifest</button>
+      </div>
+    `;
+  }).join('');
+}
+
+async function viewArchive(date) {
+  const manifest = await apiGet(`/api/manifest?date=${date}`);
+  const dbManifest = await apiGet(`/api/config/${date}`);
+  const result = document.getElementById('manifest-details');
+  
+  const m = manifest || {};
+  const db = dbManifest && dbManifest.db_manifest ? dbManifest.db_manifest : {};
+  
+  result.innerHTML = `
+    <div class="grid grid-2">
+      <div class="stat">
+        <div class="stat-label">Export-Datum</div>
+        <div class="stat-value info" style="font-size:18px;">${m.date || date}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Config-Größe</div>
+        <div class="stat-value success" style="font-size:18px;">${m.total_size_human || '—'}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Config-Dateien</div>
+        <div class="stat-value" style="font-size:18px;">${(m.files || []).length}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">DB-Größe</div>
+        <div class="stat-value" style="font-size:18px;">${db.total_size_human || '—'}</div>
+      </div>
+    </div>
+    <div style="margin-top:16px;">
+      <strong> Config-Dateien:</strong>
+      <pre style="color:var(--text-dim);font-size:12px;margin-top:8px;white-space:pre-wrap;">${(m.files || []).map(f => '  ' + f.path).join('\n')}</pre>
+    </div>
+    <div style="margin-top:12px;">
+      <strong> DB-Dateien:</strong>
+      <pre style="color:var(--text-dim);font-size:12px;margin-top:8px;white-space:pre-wrap;">${(db.files || []).map(f => '  ' + f.path).join('\n')}</pre>
+    </div>
+  `;
+}
+
+// --- Export ---
+async function doExport(type) {
+  const logEl = document.getElementById('export-log');
+  const btnId = type === 'config' ? 'btn-export-config' : 'btn-export-db';
+  const btn = document.getElementById(btnId);
+
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner"></span> ${type === 'config' ? 'Config' : 'DB'}-Export läuft...`;
+  logEl.innerHTML = `<span class="line">▶ Starte ${type}-Export...</span>`;
+
+  const endpoint = type === 'config' ? '/api/export/config' : '/api/export/db';
+  const result = await apiPost(endpoint, {});
+
+  if (result?.status === 'success') {
+    logEl.innerHTML += `\n<span class="line ok"> ${type}-Export erfolgreich!</span>\n`;
+    logEl.innerHTML += `<span class="line ok"> Ziel: /Data/Backup/config/${result.date}/</span>`;
+  } else {
+    logEl.innerHTML += `\n<span class="line err"> Fehler: ${result?.output || result?.error || 'Unbekannt'}</span>`;
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = type === 'config' ? ' Config-Export starten' : ' DB-Export starten';
+
+  // Refresh overview
+  loadOverview();
+}
+
+// --- Analysis ---
+async function doAnalysis() {
+  const result = await apiGet('/api/analysis');
+  const container = document.getElementById('analysis-result');
+
+  if (!result) {
+    container.innerHTML = '<div class="alert error"> Analyse fehlgeschlagen — Verbindung zur Olares One unterbrochen.</div>';
+    return;
+  }
+
+  const totalApps = result.apps?.length || 0;
+  const exportedApps = result.apps?.filter(a => a.settings_exported).length || 0;
+  const warnings = result.warnings || [];
+  const missing = result.missing || [];
+
+  let html = `
+    <div class="alert ${missing.length > 0 ? 'error' : warnings.length > 0 ? 'warning' : 'success'}">
+      <span>${missing.length > 0 ? '' : warnings.length > 0 ? '' : ''}</span>
+      <div><strong>${result.summary}</strong></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon"></span> App-Übersicht</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>App</th>
+              <th>State</th>
+              <th>Data-Verz.</th>
+              <th>Settings</th>
+              <th>DB-Backup</th>
+            </tr>
+          </thead>
+          <tbody>
+  `;
+
+  (result.apps || []).forEach(app => {
+    html += `<tr>
+      <td><strong>${app.name}</strong></td>
+      <td><span class="tag ${app.state === 'running' ? 'running' : app.state === 'stopped' ? 'stopped' : 'error'}">${app.state}</span></td>
+      <td>${app.has_data_dir ? '' : ''}</td>
+      <td>${app.settings_exported ? '' : ''}</td>
+      <td>${app.db_backup ? '' : '—'}</td>
+    </tr>`;
+  });
+
+  html += `</tbody></table></div></div>`;
+
+  if (warnings.length > 0) {
+    html += `<div class="card">
+      <div class="card-title"><span class="icon"></span> Warnungen (${warnings.length})</div>
+      ${warnings.map(w => `<div class="alert warning"><span></span><div>${w}</div></div>`).join('')}
+    </div>`;
+  }
+
+  if (missing.length > 0) {
+    html += `<div class="card">
+      <div class="card-title"><span class="icon"></span> Kritische Lücken (${missing.length})</div>
+      ${missing.map(m => `<div class="alert error"><span></span><div>${m}</div></div>`).join('')}
+    </div>`;
+  }
+
+  // Auto-Export Button
+  html += `<div class="btn-group">
+    <button class="btn primary" onclick="doExport('config')"> Alle Settings jetzt exportieren</button>
+  </div>`;
+
+  container.innerHTML = html;
+}
+
+async function loadAnalysis() {
+  document.getElementById('analysis-result').innerHTML = '<div class="alert info"><span></span><div>Klicke auf "Analyse starten" um die Gap-Analyse durchzuführen.</div></div>';
+}
+
+// --- Restore ---
+let selectedPlanId = '';
+let selectedSnapshotId = '';
+
+function updateRestoreSnapshots() {
+  // Snapshots laden — vereinfacht: zeigt Info
+  const planId = document.getElementById('restore-plan').value;
+  selectedPlanId = planId;
+  const snapSelect = document.getElementById('restore-snapshot');
+  snapSelect.innerHTML = '<option value="">— Snapshots werden geladen —</option>';
+
+  if (planId) {
+    apiGet(`/api/backups`).then(data => {
+      const plan = (data?.plans?.backups || []).find(p => p.id === planId);
+      if (plan) {
+        snapSelect.innerHTML = `<option value="${plan.id}">${plan.name} — ${(parseInt(plan.size)/1048576).toFixed(1)} MB — ${plan.status}</option>`;
+        selectedSnapshotId = plan.id;
+      }
+    });
+  }
+}
+
+function doRestore() {
+  const planId = document.getElementById('restore-plan').value;
+  if (!planId) {
+    alert('Bitte wähle einen Backup-Plan.');
+    return;
+  }
+
+  selectedPlanId = planId;
+  selectedSnapshotId = planId;
+
+  document.getElementById('modal-restore-info').innerHTML = `
+    <p>Du bist dabei, einen Restore zu starten.</p>
+    <p><strong>Plan:</strong> ${planId}</p>
+    <p><strong>Achtung:</strong> Dies überschreibt bestehende Daten!</p>
+  `;
+  document.getElementById('modal-restore').classList.add('active');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+}
+
+async function confirmRestore() {
+  closeModal('modal-restore');
+  const logEl = document.getElementById('restore-log');
+  logEl.innerHTML = '<span class="line">▶ Starte Restore...</span>';
+
+  const result = await apiPost('/api/restore', {
+    plan_id: selectedPlanId,
+    snapshot_id: selectedSnapshotId,
+    target_path: '/Data/'
+  });
+
+  if (result) {
+    logEl.innerHTML = `<span class="line warn"> ${result.message || 'Restore wird verarbeitet.'}</span>\n`;
+    logEl.innerHTML += `<span class="line"> Plan: ${result.plan_id}</span>\n`;
+    logEl.innerHTML += `<span class="line"> Snapshot: ${result.snapshot_id}</span>\n`;
+    logEl.innerHTML += `<span class="line warn"> Bitte prüfe den Restore in den Olares Settings UI.</span>`;
+  }
+}
+
+// --- Init ---
+(async function init() {
+  await checkConnection();
+  await loadOverview();
+
+  // Auto-refresh alle 60 Sekunden
+  setInterval(async () => {
+    await checkConnection();
+    const activeTab = document.querySelector('.tab.active');
+    if (activeTab?.dataset.tab === 'overview') await loadOverview();
+    if (activeTab?.dataset.tab === 'backups') await loadBackups();
+    if (activeTab?.dataset.tab === 'archives') await loadArchives();
+    if (activeTab?.dataset.tab === 'analysis') loadAnalysis();
+  }, 60000);
+})();
+</script>
+
+</body>
+</html>

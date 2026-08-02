@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rewind
+  labels:
+    app: rewind
+spec:
+  replicas: {{ .Values.workloads.rewind.replicaCount }}
+  selector:
+    matchLabels:
+      app: rewind
+  template:
+    metadata:
+      labels:
+        app: rewind
+    spec:
+      containers:
+        - name: rewind
+          image: ghcr.io/bayerhazard/rewind:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8765
+              protocol: TCP
+          volumeMounts:
+            - name: appdata
+              mountPath: /Data/Backup
+      volumes:
+        - name: appdata
+          hostPath:
+            path: {{ .Values.userspace.appData.path }}
+            type: DirectoryOrCreate
