@@ -269,22 +269,44 @@ except:
                 save_json "${app_dir}/env.json" '{}' "ok" "no env data"
             fi
 
-            local entrances_data
+            # Entrances ermitteln
+            local entrances_data entrance_names=""
             if entrances_data=$(run_cmd "app-entrances-${app}" settings apps entrances list "$app" 2>/dev/null); then
                 save_json "${app_dir}/entrances.json" "$entrances_data" "ok"
+                entrance_names=$(echo "$entrances_data" | python3 -c "
+import json, sys
+try:
+    for e in json.load(sys.stdin):
+        n = e.get('name', '')
+        if n:
+            print(n)
+except:
+    pass
+" 2>/dev/null)
             else
                 save_json "${app_dir}/entrances.json" '{}' "ok" "no entrances"
             fi
 
-            local domain_data
-            domain_data=$(run_cmd "app-domain-${app}" settings apps domain get "$app" 2>/dev/null || echo '{"domain": "not set"}')
-            save_json "${app_dir}/domain.json" "$domain_data" "ok"
-
-            local policy_data
-            if policy_data=$(run_cmd "app-policy-${app}" settings apps policy get "$app" 2>/dev/null); then
-                save_json "${app_dir}/policy.json" "$policy_data" "ok"
+            # Domain + Policy pro Entrance (korrekte CLI-Syntax: <app> <entrance>)
+            if [ -z "$entrance_names" ]; then
+                save_json "${app_dir}/domain.json" '{"note":"no entrance"}' "ok"
+                save_json "${app_dir}/policy.json" '{"note":"no entrance"}' "ok"
             else
-                save_json "${app_dir}/policy.json" '{}' "ok" "no policy"
+                local entrance
+                while IFS= read -r entrance; do
+                    [ -z "$entrance" ] && continue
+                    local domain_data policy_data
+                    if domain_data=$(run_cmd "app-domain-${app}-${entrance}" settings apps domain get "$app" "$entrance" 2>/dev/null); then
+                        save_json "${app_dir}/domain-${entrance}.json" "$domain_data" "ok"
+                    else
+                        save_json "${app_dir}/domain-${entrance}.json" '{}' "ok" "no domain"
+                    fi
+                    if policy_data=$(run_cmd "app-policy-${app}-${entrance}" settings apps policy get "$app" "$entrance" 2>/dev/null); then
+                        save_json "${app_dir}/policy-${entrance}.json" "$policy_data" "ok"
+                    else
+                        save_json "${app_dir}/policy-${entrance}.json" '{}' "ok" "no policy"
+                    fi
+                done <<< "$entrance_names"
             fi
 
             app_count=$((app_count + 1))

@@ -234,57 +234,57 @@ def perform_restore(date_str, apps=None):
     log_msg.append(f"{len(selected)} App(s) ausgewaehlt: {', '.join(selected)}")
     log_msg.append("")
 
-    # 3. Restore App Settings (env, domain, policy)
+    # 3. Restore App Settings (Domain + Policy pro Entrance)
     for app in selected:
         log_msg.append(f"-> {app}")
 
+        # env.json enthaelt nur Var-Definitionen (keine Werte) — nicht wiederherstellbar, nur informativ
         env_data = read_export_json(date_str, f"apps/{app}/env.json")
-        if env_data and isinstance(env_data, dict):
-            vars_to_set = []
-            for k, v in env_data.items():
-                if not k.startswith("_"):
-                    vars_to_set.append(f'{k}="{v}"')
-            if vars_to_set:
-                cmd = f"{OLARES_CLI} settings apps env set {app} " + " ".join(vars_to_set)
-                r = run_cmd(cmd, timeout=30)
-                if r["success"]:
-                    log_msg.append(f"  OK: {app} env vars restored")
-                else:
-                    log_msg.append(f"  WARN: {app} env vars failed: {r['stderr'][:100]}")
-                    all_success = False
-            else:
-                log_msg.append("  -- keine env-Variablen")
-        else:
-            log_msg.append("  -- kein env.json")
+        if env_data:
+            log_msg.append("  -- env.json: nur Definitionen, keine Werte (nicht wiederherstellbar)")
 
-        domain_data = read_export_json(date_str, f"apps/{app}/domain.json")
-        if domain_data and isinstance(domain_data, dict):
-            third_level = domain_data.get("thirdLevel", domain_data.get("domain", ""))
-            if third_level:
-                cmd = f"{OLARES_CLI} settings apps domain set {app} {app} --third-level {third_level}"
-                r = run_cmd(cmd, timeout=15)
-                if r["success"]:
-                    log_msg.append(f"  OK: {app} domain restored")
-                else:
-                    log_msg.append(f"  WARN: {app} domain failed: {r['stderr'][:80]}")
-                    all_success = False
-            else:
-                log_msg.append("  -- kein dritter Level gesetzt")
-        else:
-            log_msg.append("  -- kein domain.json")
+        # Entrance-Dateien finden: domain-<entrance>.json / policy-<entrance>.json
+        r = run_cmd(f"ls {CONFIG_DIR}/{date_str}/apps/{app}/ 2>/dev/null")
+        entries = r["stdout"].strip().split("\n") if r["success"] else []
+        entrances = []
+        for e in entries:
+            e = e.strip()
+            if e.startswith("domain-") and e.endswith(".json"):
+                entrances.append(e[len("domain-"):-len(".json")])
 
-        policy_data = read_export_json(date_str, f"apps/{app}/policy.json")
-        if policy_data and isinstance(policy_data, dict):
-            auth = policy_data.get("auth", policy_data.get("authentication", "internal"))
-            cmd = f"{OLARES_CLI} settings apps policy set {app} --auth {auth}"
-            r = run_cmd(cmd, timeout=15)
-            if r["success"]:
-                log_msg.append(f"  OK: {app} policy restored")
-            else:
-                log_msg.append(f"  WARN: {app} policy failed: {r['stderr'][:80]}")
-                all_success = False
+        if not entrances:
+            log_msg.append("  -- keine Entrance-Domains im Export")
         else:
-            log_msg.append("  -- kein policy.json")
+            for entrance in entrances:
+                domain_data = read_export_json(date_str, f"apps/{app}/domain-{entrance}.json")
+                if domain_data and isinstance(domain_data, dict):
+                    third_level = domain_data.get("third_level_domain", "")
+                    if third_level:
+                        cmd = f"{OLARES_CLI} settings apps domain set {app} {entrance} --third-level {third_level}"
+                        r = run_cmd(cmd, timeout=15)
+                        if r["success"]:
+                            log_msg.append(f"  OK: {app}/{entrance} domain -> {third_level}")
+                        else:
+                            log_msg.append(f"  WARN: {app}/{entrance} domain failed: {r['stderr'][:80]}")
+                            all_success = False
+                    else:
+                        log_msg.append(f"  -- {app}/{entrance}: kein third_level gesetzt")
+
+                policy_data = read_export_json(date_str, f"apps/{app}/policy-{entrance}.json")
+                if policy_data and isinstance(policy_data, dict):
+                    default_policy = policy_data.get("default_policy", "")
+                    if default_policy in ("system", "one_factor", "two_factor", "public"):
+                        cmd = f"{OLARES_CLI} settings apps policy set {app} {entrance} --default-policy {default_policy}"
+                        r = run_cmd(cmd, timeout=15)
+                        if r["success"]:
+                            log_msg.append(f"  OK: {app}/{entrance} policy -> {default_policy}")
+                        else:
+                            log_msg.append(f"  WARN: {app}/{entrance} policy failed: {r['stderr'][:80]}")
+                            all_success = False
+                    elif default_policy:
+                        log_msg.append(f"  -- {app}/{entrance}: policy-Wert '{default_policy}' nicht gueltig, uebersprungen")
+                    else:
+                        log_msg.append(f"  -- {app}/{entrance}: kein default_policy")
 
         log_msg.append("")
 
