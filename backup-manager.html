@@ -763,9 +763,10 @@ async function loadBackups() {
   }).join('');
 
   // Config exports
-  const exportsList = await apiGet('/api/config');
+  const exportsData = await apiGet('/api/export/dates');
   const exportsEl = document.getElementById('config-exports-list');
-  if (exportsList && Array.isArray(exportsList)) {
+  const exportsList = exportsData?.config && Array.isArray(exportsData.config) ? exportsData.config : [];
+  if (exportsList.length > 0) {
     exportsEl.innerHTML = exportsList.map(date => `
       <div class="stat" style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
         <div>
@@ -786,7 +787,7 @@ async function loadBackups() {
 }
 
 async function viewExport(date) {
-  const data = await apiGet(`/api/config/${date}`);
+  const data = await apiGet(`/api/export/details/${date}`);
   const result = document.getElementById('export-details');
   
   if (!data || data.error) {
@@ -794,9 +795,9 @@ async function viewExport(date) {
     return;
   }
   
-  const manifest = data.manifest || {};
+  const manifest = data.config_manifest || {};
   const dbManifest = data.db_manifest || {};
-  const totalSize = data.total_size || '—';
+  const totalSize = data.config_size || '—';
   
   result.innerHTML = `
     <div class="grid grid-2">
@@ -810,16 +811,16 @@ async function viewExport(date) {
       </div>
       <div class="stat">
         <div class="stat-label">Config-Dateien</div>
-        <div class="stat-value success" style="font-size:18px;">${(manifest.files || []).length}</div>
+        <div class="stat-value success" style="font-size:18px;">${(manifest.files || data.config_files || []).length}</div>
       </div>
       <div class="stat">
         <div class="stat-label">DB-Dateien</div>
-        <div class="stat-value success" style="font-size:18px;">${(dbManifest.files || []).length}</div>
+        <div class="stat-value success" style="font-size:18px;">${(dbManifest.files || data.db_files || []).length}</div>
       </div>
     </div>
     <div style="margin-top:16px;">
       <strong> Dateien:</strong>
-      <pre style="color:var(--text-dim);font-size:12px;margin-top:8px;white-space:pre-wrap;">${(data.files || []).map(f => '  ' + f.replace('/Data/Backup/config/' + date + '/', '')).join('\n')}</pre>
+      <pre style="color:var(--text-dim);font-size:12px;margin-top:8px;white-space:pre-wrap;">${(data.config_files || []).map(f => '  ' + f.replace('/Data/Backup/config/' + date + '/', '')).join('\n')}</pre>
     </div>
     ${manifest.total_size_human ? `<div style="margin-top:12px;"><strong> Config-Größe:</strong> ${manifest.total_size_human}</div>` : ''}
     ${dbManifest.total_size_human ? `<div style="margin-top:4px;"><strong> DB-Größe:</strong> ${dbManifest.total_size_human}</div>` : ''}
@@ -851,7 +852,7 @@ async function loadArchives() {
 
 async function viewArchive(date) {
   const manifest = await apiGet(`/api/manifest?date=${date}`);
-  const dbManifest = await apiGet(`/api/config/${date}`);
+  const dbManifest = await apiGet(`/api/export/details/${date}`);
   const result = document.getElementById('manifest-details');
   
   const m = manifest || {};
