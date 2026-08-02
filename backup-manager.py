@@ -26,11 +26,9 @@ DEFAULT_PORT = 8765
 OLARES_CLI = "olares-cli"
 BACKUP_DIR = "/Data/Backup"
 CONFIG_DIR = f"{BACKUP_DIR}/config"
-DB_DIR = f"{BACKUP_DIR}/db"
 
 last_export = {
     "config": None,
-    "db": None,
     "status": "idle"
 }
 export_lock = threading.Lock()
@@ -117,48 +115,37 @@ def get_export_dates():
         return [d.strip() for d in r["stdout"].strip().split("\n") if d.strip()]
     return []
 
-def get_db_dates():
-    r = run_cmd(f"ls -1d {DB_DIR}/20* 2>/dev/null | xargs -I{{}} basename {{}} | sort -r")
-    if r["success"]:
-        return [d.strip() for d in r["stdout"].strip().split("\n") if d.strip()]
-    return []
-
-def get_manifest(date_str, kind="config"):
-    base = CONFIG_DIR if kind == "config" else DB_DIR
-    r = run_cmd(f"cat {base}/{date_str}/manifest.json 2>&1")
+def get_manifest(date_str):
+    r = run_cmd(f"cat {CONFIG_DIR}/{date_str}/manifest.json 2>&1")
     if r["success"]:
         return parse_json(r["stdout"])
     return {"error": "Manifest not found"}
 
 def get_export_details(date_str):
     config_manifest = get_manifest(date_str, "config")
-    db_manifest = get_manifest(date_str, "db")
 
     r = run_cmd(f"find {CONFIG_DIR}/{date_str} -type f | head -50 2>&1")
     config_files = r["stdout"].strip().split("\n") if r["success"] else []
 
-    r = run_cmd(f"find {DB_DIR}/{date_str} -type f | head -50 2>&1")
-    db_files = r["stdout"].strip().split("\n") if r["success"] else []
-
     r = run_cmd(f"du -sh {CONFIG_DIR}/{date_str} 2>&1")
     config_size = r["stdout"].strip().split()[0] if r["success"] else "unknown"
-
-    r = run_cmd(f"du -sh {DB_DIR}/{date_str} 2>&1")
-    db_size = r["stdout"].strip().split()[0] if r["success"] else "unknown"
 
     return {
         "date": date_str,
         "config_manifest": config_manifest,
-        "db_manifest": db_manifest,
         "config_files": config_files[:50],
-        "db_files": db_files[:50],
-        "config_size": config_size,
-        "db_size": db_size
+        "config_size": config_size
     }
 
-def _run_export_background(kind):
+def list_export_apps(date_str):
+    r = run_cmd(f"ls -1d {CONFIG_DIR}/{date_str}/apps/*/ 2>/dev/null")
+    if not r["success"] or not r["stdout"].strip():
+        return []
+    return [os.path.basename(d.rstrip("/")) for d in r["stdout"].strip().split("\n") if d.strip()]
+
+def _run_export_background():
     timestamp = datetime.now().strftime("%Y-%m-%d")
-    script = "olares-config-export.sh" if kind == "config" else "olares-db-export.sh"
+    script = "olares-config-export.sh"
     cmd = f"bash /app/{script} 2>&1"
 
     # Lange Laufzeit (30+ olares-cli-Calls + Pro-App-Calls) — 15 Min Budget.
@@ -166,7 +153,7 @@ def _run_export_background(kind):
 
     with export_lock:
         if r["success"] or "completed" in r["stdout"]:
-            last_export[kind] = {
+            last_export["config"] = {
                 "timestamp": datetime.now().isoformat(),
                 "date": timestamp,
                 "status": "success",
@@ -174,7 +161,7 @@ def _run_export_background(kind):
             }
             last_export["status"] = "success"
         else:
-            last_export[kind] = {
+            last_export["config"] = {
                 "timestamp": datetime.now().isoformat(),
                 "date": timestamp,
                 "status": "error",
@@ -183,12 +170,12 @@ def _run_export_background(kind):
             last_export["status"] = "error"
 
 
-def trigger_export(kind):
+def trigger_export():
     with export_lock:
-        current = last_export.get(kind)
+        current = last_export.get("config")
         if current and current.get("status") == "running":
-            return {"status": "running", "message": f"{kind}-Export läuft bereits"}
-        last_export[kind] = {
+            return {"status": "running", "message": "Config-Export läuft bereits"}
+        last_export["config"] = {
             "timestamp": None,
             "date": datetime.now().strftime("%Y-%m-%d"),
             "status": "running",
@@ -196,9 +183,9 @@ def trigger_export(kind):
         }
         last_export["status"] = "running"
 
-    t = threading.Thread(target=_run_export_background, args=(kind,), daemon=True)
+    t = threading.Thread(target=_run_export_background, daemon=True)
     t.start()
-    return {"status": "started", "message": f"{kind}-Export läuft im Hintergrund (mehrere Minuten)"}
+    return {"status": "started", "message": "Config-Export läuft im Hintergrund (mehrere Minuten)"}
 
 # --- Restore -----------------------------------------------------------------
 def read_export_json(date_str, rel_path):
@@ -214,12 +201,12 @@ def read_export_json(date_str, rel_path):
         return parse_json(content)
     return None
 
-def perform_restore(date_str, dry_run=False):
+def perform_restore(date_str, apps=None):
     log_msg = []
     all_success = True
 
-    log_msg.append(f"Starting restore from export {date_str}...")
-    log_msg.append(f"Source: {CONFIG_DIR}/{date_str}")
+    log_msg.append(f"Restore der App-Einstellungen aus Export {date_str}...")
+    log_msg.append(f"Quelle: {CONFIG_DIR}/{date_str}")
     log_msg.append("")
 
     # 1. Verify export exists
@@ -227,129 +214,85 @@ def perform_restore(date_str, dry_run=False):
     if not r["success"] or "MISSING" in r["stdout"]:
         return {"success": False, "error": f"Export {date_str} not found at {CONFIG_DIR}/", "log": log_msg}
 
-    log_msg.append("Export directory verified.")
+    log_msg.append("Export-Verzeichnis verifiziert.")
+
+    # 2. Available apps
+    available = list_export_apps(date_str)
+    if not available:
+        log_msg.append("Keine App-Einstellungen in diesem Export gefunden.")
+        return {"success": True, "date": date_str, "log": "\n".join(log_msg)}
+
+    if apps is None:
+        selected = available
+    else:
+        selected = [a for a in apps if a in available]
+
+    if not selected:
+        log_msg.append("Keine Apps fuer den Restore ausgewaehlt.")
+        return {"success": True, "date": date_str, "log": "\n".join(log_msg)}
+
+    log_msg.append(f"{len(selected)} App(s) ausgewaehlt: {', '.join(selected)}")
     log_msg.append("")
 
-    if dry_run:
-        r = run_cmd(f"find {CONFIG_DIR}/{date_str} -name '*.json' | head -30 2>&1")
-        if r["success"]:
-            log_msg.append("Files that would be restored:")
-            for line in r["stdout"].strip().split("\n")[:30]:
-                log_msg.append(f"  - {line}")
+    # 3. Restore App Settings (env, domain, policy)
+    for app in selected:
+        log_msg.append(f"-> {app}")
 
-        r = run_cmd(f"test -d {DB_DIR}/{date_str} && echo EXISTS || echo MISSING")
-        if r["success"] and "EXISTS" in r["stdout"]:
-            log_msg.append(f"Database dumps found at {DB_DIR}/{date_str}")
-            r2 = run_cmd(f"ls {DB_DIR}/{date_str}/*.sql.gz 2>/dev/null")
-            if r2["success"]:
-                for line in r2["stdout"].strip().split("\n"):
-                    log_msg.append(f"  - {os.path.basename(line)}")
+        env_data = read_export_json(date_str, f"apps/{app}/env.json")
+        if env_data and isinstance(env_data, dict):
+            vars_to_set = []
+            for k, v in env_data.items():
+                if not k.startswith("_"):
+                    vars_to_set.append(f'{k}="{v}"')
+            if vars_to_set:
+                cmd = f"{OLARES_CLI} settings apps env set {app} " + " ".join(vars_to_set)
+                r = run_cmd(cmd, timeout=30)
+                if r["success"]:
+                    log_msg.append(f"  OK: {app} env vars restored")
+                else:
+                    log_msg.append(f"  WARN: {app} env vars failed: {r['stderr'][:100]}")
+                    all_success = False
+            else:
+                log_msg.append("  -- keine env-Variablen")
+        else:
+            log_msg.append("  -- kein env.json")
 
-        log_msg.append("")
-        log_msg.append("[DRY-RUN] No changes made.")
-        return {"success": True, "date": date_str, "dry_run": True, "log": "\n".join(log_msg)}
-
-    # 2. Restore App Settings
-    log_msg.append("Restoring app settings...")
-    r = run_cmd(f"ls {CONFIG_DIR}/{date_str}/apps/ 2>/dev/null")
-    if r["success"] and r["stdout"].strip():
-        apps = [a.strip() for a in r["stdout"].strip().split("\n") if a.strip()]
-        for app in apps:
-            env_data = read_export_json(date_str, f"apps/{app}/env.json")
-            if env_data and isinstance(env_data, dict):
-                vars_to_set = []
-                for k, v in env_data.items():
-                    if not k.startswith("_"):
-                        vars_to_set.append(f'{k}="{v}"')
-                if vars_to_set:
-                    cmd = f"{OLARES_CLI} settings apps env set {app} " + " ".join(vars_to_set)
-                    r = run_cmd(cmd, timeout=30)
-                    if r["success"]:
-                        log_msg.append(f"  OK: {app} env vars restored")
-                    else:
-                        log_msg.append(f"  WARN: {app} env vars failed: {r['stderr'][:100]}")
-
-            domain_data = read_export_json(date_str, f"apps/{app}/domain.json")
-            if domain_data and isinstance(domain_data, dict):
-                third_level = domain_data.get("thirdLevel", domain_data.get("domain", ""))
-                if third_level:
-                    cmd = f"{OLARES_CLI} settings apps domain set {app} {app} --third-level {third_level}"
-                    r = run_cmd(cmd, timeout=15)
-                    if r["success"]:
-                        log_msg.append(f"  OK: {app} domain restored")
-                    else:
-                        log_msg.append(f"  WARN: {app} domain failed")
-
-            policy_data = read_export_json(date_str, f"apps/{app}/policy.json")
-            if policy_data and isinstance(policy_data, dict):
-                auth = policy_data.get("auth", policy_data.get("authentication", "internal"))
-                cmd = f"{OLARES_CLI} settings apps policy set {app} --auth {auth}"
+        domain_data = read_export_json(date_str, f"apps/{app}/domain.json")
+        if domain_data and isinstance(domain_data, dict):
+            third_level = domain_data.get("thirdLevel", domain_data.get("domain", ""))
+            if third_level:
+                cmd = f"{OLARES_CLI} settings apps domain set {app} {app} --third-level {third_level}"
                 r = run_cmd(cmd, timeout=15)
                 if r["success"]:
-                    log_msg.append(f"  OK: {app} policy restored")
+                    log_msg.append(f"  OK: {app} domain restored")
                 else:
-                    log_msg.append(f"  WARN: {app} policy failed")
-    else:
-        log_msg.append("  No app settings found.")
+                    log_msg.append(f"  WARN: {app} domain failed: {r['stderr'][:80]}")
+                    all_success = False
+            else:
+                log_msg.append("  -- kein dritter Level gesetzt")
+        else:
+            log_msg.append("  -- kein domain.json")
 
-    # 3. Restore Network
-    log_msg.append("")
-    log_msg.append("Restoring network config...")
-    rp_data = read_export_json(date_str, "network/reverse-proxy.json")
-    if rp_data and isinstance(rp_data, dict):
-        if rp_data.get("enableFrp"):
-            cmd = f"{OLARES_CLI} settings network reverse-proxy set --enable-frp"
+        policy_data = read_export_json(date_str, f"apps/{app}/policy.json")
+        if policy_data and isinstance(policy_data, dict):
+            auth = policy_data.get("auth", policy_data.get("authentication", "internal"))
+            cmd = f"{OLARES_CLI} settings apps policy set {app} --auth {auth}"
             r = run_cmd(cmd, timeout=15)
             if r["success"]:
-                log_msg.append("  OK: Reverse Proxy (FRP) enabled")
+                log_msg.append(f"  OK: {app} policy restored")
             else:
-                log_msg.append(f"  WARN: Reverse Proxy: {r['stderr'][:80]}")
-
-    # 4. Restore VPN
-    log_msg.append("")
-    log_msg.append("Restoring VPN config...")
-    acl_data = read_export_json(date_str, "vpn/acl.json")
-    if acl_data and isinstance(acl_data, list):
-        for rule in acl_data[:10]:
-            app = rule.get("app", "")
-            action = rule.get("action", "allow")
-            if app:
-                cmd = f"{OLARES_CLI} settings vpn acl set --app {app} --action {action}"
-                r = run_cmd(cmd, timeout=15)
-                if r["success"]:
-                    log_msg.append(f"  OK: VPN ACL {app} -> {action}")
-                else:
-                    log_msg.append(f"  WARN: VPN ACL {app}: {r['stderr'][:60]}")
-
-    # 5. Restore Databases
-    log_msg.append("")
-    log_msg.append("Restoring databases...")
-    r = run_cmd(f"ls {DB_DIR}/{date_str}/*.sql.gz 2>/dev/null")
-    if r["success"] and r["stdout"].strip():
-        dumps = [d.strip() for d in r["stdout"].strip().split("\n") if d.strip().endswith(".sql.gz")]
-        for dump_path in dumps:
-            db_name = os.path.basename(dump_path).replace(".sql.gz", "")
-            log_msg.append(f"  Restoring {db_name}...")
-            cmd = f"""
-gunzip -c {dump_path} | \\
-kubectl exec -i -n os-platform citus-0 -- \\
-psql -U olares -h citus-master-svc.user-system-aimighty -d {db_name} 2>&1
-"""
-            r = run_cmd(cmd, timeout=180)
-            if r["success"] or "ERROR" not in r["stderr"]:
-                log_msg.append(f"  OK: {db_name} restored")
-            else:
-                log_msg.append(f"  ERROR: {db_name} failed: {r['stderr'][:120]}")
+                log_msg.append(f"  WARN: {app} policy failed: {r['stderr'][:80]}")
                 all_success = False
-    else:
-        log_msg.append("  No database dumps found.")
+        else:
+            log_msg.append("  -- kein policy.json")
 
-    log_msg.append("")
+        log_msg.append("")
+
     log_msg.append("=" * 50)
     if all_success:
-        log_msg.append("Restore complete!")
+        log_msg.append("Restore abgeschlossen!")
     else:
-        log_msg.append("Restore completed with errors — check log!")
+        log_msg.append("Restore mit Warnungen abgeschlossen — Log pruefen!")
     log_msg.append("=" * 50)
 
     return {
@@ -390,10 +333,13 @@ class BackupHandler(BaseHTTPRequestHandler):
             elif path == "/api/apps":
                 self.send_json(get_apps())
             elif path == "/api/export/dates":
-                self.send_json({"config": get_export_dates(), "db": get_db_dates()})
+                self.send_json({"config": get_export_dates()})
             elif path.startswith("/api/export/details/"):
                 date_str = path.split("/api/export/details/")[1]
                 self.send_json(get_export_details(date_str))
+            elif path == "/api/restore/apps":
+                date_str = params.get("date", [""])[0]
+                self.send_json({"apps": list_export_apps(date_str)} if date_str else {"error": "Missing 'date'"}, 400 if not date_str else 200)
             elif path == "/api/export/status":
                 self.send_json(last_export)
             elif path == "/":
@@ -439,18 +385,18 @@ class BackupHandler(BaseHTTPRequestHandler):
                 data = {}
 
             if path == "/api/export/config":
-                self.send_json(trigger_export("config"))
-
-            elif path == "/api/export/db":
-                self.send_json(trigger_export("db"))
+                self.send_json(trigger_export())
 
             elif path == "/api/restore":
                 date_str = data.get("date", "")
-                dry_run = data.get("dry_run", False)
+                apps = data.get("apps")
                 if not date_str:
                     self.send_json({"error": "Missing 'date' parameter"}, 400)
                 else:
-                    self.send_json(perform_restore(date_str, dry_run))
+                    if not isinstance(apps, list) or len(apps) == 0:
+                        self.send_json({"error": "Bitte mindestens eine App für den Restore auswählen"}, 400)
+                    else:
+                        self.send_json(perform_restore(date_str, apps))
 
             else:
                 self.send_json({"error": f"Unknown POST endpoint: {path}"}, 404)

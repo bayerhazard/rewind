@@ -1,9 +1,8 @@
-FROM ghcr.io/bayerhazard/rewind:1.0.9
+FROM ghcr.io/bayerhazard/rewind:1.0.10
 WORKDIR /app
 COPY backup-manager.html /app/backup-manager.html
 COPY backup-manager.py /app/backup-manager.py
 COPY logo.png /app/logo.png
 COPY olares-config-export.sh /app/olares-config-export.sh
-COPY olares-db-export.sh /app/olares-db-export.sh
 RUN chmod +x /app/*.sh
 CMD ["python3", "backup-manager.py", "--port", "8765"]

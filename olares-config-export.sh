@@ -165,71 +165,25 @@ main() {
     me_info=$(run_cmd "whoami" settings me whoami)
     save_json "${CONFIG_DIR}/system/whoami.json" "$me_info" "ok"
 
-    # --- 2. Network Configuration ---
-    log "Network configuration..."
-    local rp_info
-    rp_info=$(run_cmd "reverse-proxy" settings network reverse-proxy get)
-    save_json "${CONFIG_DIR}/network/reverse-proxy.json" "$rp_info" "ok"
-
-    local frp_list
-    frp_list=$(run_cmd "frp" settings network frp list)
-    save_json "${CONFIG_DIR}/network/frp.json" "$frp_list" "ok"
-
-    local overlay_status
-    overlay_status=$(run_cmd "overlay" settings network overlay status)
-    save_json "${CONFIG_DIR}/network/overlay.json" "$overlay_status" "ok"
-
-    local hosts_file
-    hosts_file=$(run_cmd "hosts-file" settings network hosts-file get 2>/dev/null || echo '{"status": "unavailable"}')
-    save_json "${CONFIG_DIR}/network/hosts-file.json" "$hosts_file" "ok"
-
-    # --- 3. VPN Configuration ---
-    log "VPN configuration..."
-    local vpn_acl
-    vpn_acl=$(run_cmd "vpn-acl" settings vpn acl all 2>/dev/null || echo '{"error": "vpn acl not available"}')
-    save_json "${CONFIG_DIR}/vpn/acl.json" "$vpn_acl" "ok"
-
-    local vpn_devices
-    vpn_devices=$(run_cmd "vpn-devices" settings vpn devices list 2>/dev/null || echo '{"devices": []}')
-    save_json "${CONFIG_DIR}/vpn/devices.json" "$vpn_devices" "ok"
-
-    local vpn_ssh
-    vpn_ssh=$(run_cmd "vpn-ssh" settings vpn ssh status 2>/dev/null || echo '{"status": "unavailable"}')
-    save_json "${CONFIG_DIR}/vpn/ssh.json" "$vpn_ssh" "ok"
-
-    local vpn_subroutes
-    vpn_subroutes=$(run_cmd "vpn-subroutes" settings vpn subroutes status 2>/dev/null || echo '{"status": "unavailable"}')
-    save_json "${CONFIG_DIR}/vpn/subroutes.json" "$vpn_subroutes" "ok"
-
-    local vpn_policy
-    vpn_policy=$(run_cmd "vpn-policy" settings vpn public-domain-policy get 2>/dev/null || echo '{"policy": "unavailable"}')
-    save_json "${CONFIG_DIR}/vpn/public-domain-policy.json" "$vpn_policy" "ok"
-
-    # --- 4. Integration Accounts ---
+    # --- 2. Integration Accounts ---
     log "Integration accounts..."
     local integration_accounts
     integration_accounts=$(run_cmd "integration" settings integration accounts list)
     save_json "${CONFIG_DIR}/integration/accounts.json" "$integration_accounts" "ok"
 
-    # --- 5. Users ---
+    # --- 3. Users ---
     log "Users..."
     local users_me
     users_me=$(run_cmd "users-me" settings users me)
     save_json "${CONFIG_DIR}/users/role.json" "$users_me" "ok"
 
-    # --- 6. Search ---
-    log "Search configuration..."
-    local search_dirs
-    search_dirs=$(run_cmd "search-dirs" settings search dirs list)
-    save_json "${CONFIG_DIR}/search/dirs.json" "$search_dirs" "ok"
-
-    # --- 7. Appearance ---
+    # --- 4. Appearance ---
     log "Appearance..."
     local appearance
     appearance=$(run_cmd "appearance" settings appearance get)
     save_json "${CONFIG_DIR}/appearance.json" "$appearance" "ok"
 
-    # --- 8. Advanced / Developer ---
+    # --- 5. Advanced / Developer ---
     log "Advanced settings..."
     local advanced_env
     advanced_env=$(run_cmd "advanced-env" settings advanced env list 2>/dev/null || echo '{"status": "unavailable"}')
@@ -239,7 +193,7 @@ main() {
     advanced_containerd=$(run_cmd "advanced-containerd" settings advanced containerd get 2>/dev/null || echo '{"status": "unavailable"}')
     save_json "${CONFIG_DIR}/advanced/containerd.json" "$advanced_containerd" "ok"
 
-    # --- 9. GPU ---
+    # --- 6. GPU ---
     log "GPU settings..."
     local gpu_mode
     gpu_mode=$(run_cmd "gpu-mode" settings gpu mode get 2>/dev/null || echo '{"status": "unavailable"}')
@@ -249,31 +203,31 @@ main() {
     gpu_apps=$(run_cmd "gpu-apps" settings gpu apps list 2>/dev/null || echo '{"status": "unavailable"}')
     save_json "${CONFIG_DIR}/gpu/apps.json" "$gpu_apps" "ok"
 
-    # --- 10. Compute / Accelerator ---
+    # --- 7. Compute / Accelerator ---
     log "Compute settings..."
     local compute
     compute=$(run_cmd "compute" settings compute list 2>/dev/null || echo '{"status": "unavailable"}')
     save_json "${CONFIG_DIR}/compute/settings.json" "$compute" "ok"
 
-    # --- 11. Video ---
+    # --- 8. Video ---
     log "Video settings..."
     local video
     video=$(run_cmd "video" settings video get 2>/dev/null || echo '{"status": "unavailable"}')
     save_json "${CONFIG_DIR}/video/settings.json" "$video" "ok"
 
-    # --- 12. Backup Plans (Olares standard backup config) ---
+    # --- 9. Backup Plans (Olares standard backup config) ---
     log "Backup plans..."
     local backup_plans
     backup_plans=$(run_cmd "backup-plans" settings backup plans list)
     save_json "${CONFIG_DIR}/backup/plans.json" "$backup_plans" "ok"
 
-    # --- 13. Restore Plans ---
+    # --- 10. Restore Plans ---
     log "Restore plans..."
     local restore_plans
     restore_plans=$(run_cmd "restore-plans" settings restore plans list 2>/dev/null || echo '{"status": "unavailable"}')
     save_json "${CONFIG_DIR}/restore/plans.json" "$restore_plans" "ok"
 
-    # --- 14. App Settings (all installed apps) ---
+    # --- 11. App Settings (all installed apps) ---
     log "App settings (all installed apps)..."
     local apps_json
     apps_json=$(run_cmd "market-list" market list --mine)
@@ -337,12 +291,6 @@ except:
         done <<< "$app_names"
         log_ok "${app_count} apps exported"
     fi
-
-    # --- 15. Dashboard / Status ---
-    log "Dashboard status..."
-    local dashboard_apps
-    dashboard_apps=$(run_cmd "dashboard" dashboard applications)
-    save_json "${CONFIG_DIR}/status/applications.json" "$dashboard_apps" "ok"
 
     # --- Manifest ---
     log ""
