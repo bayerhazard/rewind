@@ -122,7 +122,7 @@ def get_manifest(date_str):
     return {"error": "Manifest not found"}
 
 def get_export_details(date_str):
-    config_manifest = get_manifest(date_str, "config")
+    config_manifest = get_manifest(date_str)
 
     r = run_cmd(f"find {CONFIG_DIR}/{date_str} -type f | head -50 2>&1")
     config_files = r["stdout"].strip().split("\n") if r["success"] else []
