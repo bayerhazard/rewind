@@ -32,5 +32,5 @@ spec:
       volumes:
         - name: appdata
           hostPath:
-            path: {{ .Values.userspace.appData.path }}
+            path: /olares/rootfs/userspace/pvc-userspace-aimighty-hh1h3chfhnoebc1y/Data/rewind/Backup
             type: DirectoryOrCreate

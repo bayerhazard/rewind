@@ -10,7 +10,7 @@ metadata:
   appid: rewind
   icon: https://github.com/bayerhazard/rewind/raw/master/logo.png
   title: Rewind
-  version: 1.0.18
+  version: 1.0.19
   categories:
     - Utilities
     - Developer Tools
@@ -30,13 +30,13 @@ metadata:
     - amd64
 
 spec:
-  versionName: '1.0.18'
+  versionName: '1.0.19'
   fullDescription: >
     Rewind complements the Olares standard backup by exporting app settings,
     network configs, VPN settings, integration accounts, GPU/compute settings,
     and PostgreSQL database dumps.
     All exports are written to /Data/Backup/
-  upgradeDescription: "v1.0.18: OlaresManifest-YAML-Fix (Quotes); v1.0.17: Tab Konfiguration zu Backup umbenannt; v1.0.16: Zeitplan in GUI einstellbar (MEZ/MESZ, DST-korrekt), Favicon."
+  upgradeDescription: "v1.0.19: Backup-Daten in Olares Userspace (drive/Data/rewind/Backup) statt Node-/Data/Backup."
   developer: Aimighty
   website: ''
   sourceCode: https://github.com/bayerhazard/rewind
