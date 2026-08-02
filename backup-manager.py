@@ -156,15 +156,13 @@ def get_export_details(date_str):
         "db_size": db_size
     }
 
-def trigger_export(kind):
-    with export_lock:
-        last_export["status"] = "running"
-
+def _run_export_background(kind):
     timestamp = datetime.now().strftime("%Y-%m-%d")
     script = "olares-config-export.sh" if kind == "config" else "olares-db-export.sh"
     cmd = f"bash /app/{script} 2>&1"
 
-    r = run_cmd(cmd, timeout=180)
+    # Lange Laufzeit (30+ olares-cli-Calls + Pro-App-Calls) — 15 Min Budget.
+    r = run_cmd(cmd, timeout=900)
 
     with export_lock:
         if r["success"] or "completed" in r["stdout"]:
@@ -172,7 +170,7 @@ def trigger_export(kind):
                 "timestamp": datetime.now().isoformat(),
                 "date": timestamp,
                 "status": "success",
-                "output": r["stdout"][-500:] if r["stdout"] else ""
+                "output": (r["stdout"] or "")[-500:]
             }
             last_export["status"] = "success"
         else:
@@ -180,11 +178,27 @@ def trigger_export(kind):
                 "timestamp": datetime.now().isoformat(),
                 "date": timestamp,
                 "status": "error",
-                "output": r["stderr"]
+                "output": (r["stderr"] or r["stdout"] or "Unknown error")[-500:]
             }
             last_export["status"] = "error"
 
-    return last_export[kind]
+
+def trigger_export(kind):
+    with export_lock:
+        current = last_export.get(kind)
+        if current and current.get("status") == "running":
+            return {"status": "running", "message": f"{kind}-Export läuft bereits"}
+        last_export[kind] = {
+            "timestamp": None,
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "status": "running",
+            "output": ""
+        }
+        last_export["status"] = "running"
+
+    t = threading.Thread(target=_run_export_background, args=(kind,), daemon=True)
+    t.start()
+    return {"status": "started", "message": f"{kind}-Export läuft im Hintergrund (mehrere Minuten)"}
 
 # --- Restore -----------------------------------------------------------------
 def read_export_json(date_str, rel_path):

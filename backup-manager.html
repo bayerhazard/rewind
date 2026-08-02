@@ -723,8 +723,11 @@ async function loadOverview() {
   // Last export
   const exportStatus = await apiGet('/api/export/status');
   const lastExportEl = document.getElementById('ov-last-export');
-  if (exportStatus?.config) {
-    lastExportEl.textContent = exportStatus.config.timestamp?.slice(0, 16).replace('T', ' ');
+  if (exportStatus?.config && exportStatus.config.status === 'running') {
+    lastExportEl.textContent = 'läuft...';
+    lastExportEl.className = 'stat-value info';
+  } else if (exportStatus?.config?.timestamp) {
+    lastExportEl.textContent = exportStatus.config.timestamp.slice(0, 16).replace('T', ' ');
     lastExportEl.className = 'stat-value ' + (exportStatus.config.status === 'success' ? 'success' : 'error');
   } else {
     lastExportEl.textContent = 'Noch nie';
@@ -891,24 +894,43 @@ async function doExport(type) {
   const btn = document.getElementById(btnId);
 
   btn.disabled = true;
-  btn.innerHTML = `<span class="spinner"></span> ${type === 'config' ? 'Config' : 'DB'}-Export läuft...`;
+  btn.innerHTML = `<span class="spinner"></span> ${type === 'config' ? 'Config' : 'DB'}-Export wird gestartet...`;
   logEl.innerHTML = `<span class="line">▶ Starte ${type}-Export...</span>`;
 
   const endpoint = type === 'config' ? '/api/export/config' : '/api/export/db';
   const result = await apiPost(endpoint, {});
 
-  if (result?.status === 'success') {
+  if (result?.status === 'started' || result?.status === 'running') {
+    logEl.innerHTML += `\n<span class="line"> ${type}-Export läuft im Hintergrund (mehrere Minuten)...</span>`;
+    // Status pollen, bis der Export terminiert
+    const poll = setInterval(async () => {
+      const st = await apiGet('/api/export/status');
+      const kind = st?.[type];
+      if (!kind || kind.status !== 'running') {
+        clearInterval(poll);
+        btn.disabled = false;
+        btn.innerHTML = type === 'config' ? ' Config-Export starten' : ' DB-Export starten';
+        if (kind?.status === 'success') {
+          logEl.innerHTML += `\n<span class="line ok"> ${type}-Export erfolgreich!</span>\n`;
+          logEl.innerHTML += `<span class="line ok"> Ziel: /Data/Backup/${type === 'config' ? 'config' : 'db'}/${kind.date || ''}/</span>`;
+        } else {
+          logEl.innerHTML += `\n<span class="line err"> Fehler: ${kind?.output || kind?.message || 'Unbekannt'}</span>`;
+        }
+        loadOverview();
+      }
+    }, 5000);
+  } else if (result?.status === 'success') {
     logEl.innerHTML += `\n<span class="line ok"> ${type}-Export erfolgreich!</span>\n`;
-    logEl.innerHTML += `<span class="line ok"> Ziel: /Data/Backup/config/${result.date}/</span>`;
+    logEl.innerHTML += `<span class="line ok"> Ziel: /Data/Backup/${type === 'config' ? 'config' : 'db'}/${result.date || ''}/</span>`;
+    btn.disabled = false;
+    btn.innerHTML = type === 'config' ? ' Config-Export starten' : ' DB-Export starten';
+    loadOverview();
   } else {
     logEl.innerHTML += `\n<span class="line err"> Fehler: ${result?.output || result?.error || 'Unbekannt'}</span>`;
+    btn.disabled = false;
+    btn.innerHTML = type === 'config' ? ' Config-Export starten' : ' DB-Export starten';
+    loadOverview();
   }
-
-  btn.disabled = false;
-  btn.innerHTML = type === 'config' ? ' Config-Export starten' : ' DB-Export starten';
-
-  // Refresh overview
-  loadOverview();
 }
 
 // --- Analysis ---

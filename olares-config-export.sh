@@ -304,7 +304,9 @@ except:
             [[ "$app" == *"-shared" ]] && continue
 
             local app_dir="${CONFIG_DIR}/apps/${app}"
-            mkdir -p "$app_dir"
+            if ! $DRY_RUN; then
+                mkdir -p "$app_dir"
+            fi
 
             local env_data
             if env_data=$(run_cmd "app-env-${app}" settings apps env get "$app" 2>/dev/null); then
