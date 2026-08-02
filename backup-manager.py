@@ -166,6 +166,10 @@ def _run_export_background():
     # Lange Laufzeit (30+ olares-cli-Calls + Pro-App-Calls) — 15 Min Budget.
     r = run_cmd(cmd, timeout=900)
 
+    # Exporte dem Olares-Benutzer (UID 1000) zuordnen, damit sie in der
+    # Olares Files GUI sichtbar sind (der Container läuft als root).
+    run_cmd(f"chown -R 1000:1000 {CONFIG_DIR} 2>/dev/null || true")
+
     with export_lock:
         if r["success"] or "completed" in r["stdout"]:
             last_export["config"] = {
@@ -485,6 +489,9 @@ def main():
     args = parser.parse_args()
 
     server = ThreadingHTTPServer(("0.0.0.0", args.port), BackupHandler)
+
+    # Bestehende Exporte dem Olares-Benutzer zuordnen (Sichtbarkeit in Files GUI)
+    run_cmd(f"chown -R 1000:1000 {CONFIG_DIR} 2>/dev/null || true")
 
     # Täglicher Auto-Export starten
     scheduler = threading.Thread(target=_scheduler_loop, daemon=True)

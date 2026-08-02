@@ -10,7 +10,7 @@ metadata:
   appid: rewind
   icon: https://github.com/bayerhazard/rewind/raw/master/logo.png
   title: Rewind
-  version: 1.0.20
+  version: 1.0.21
   categories:
     - Utilities
     - Developer Tools
@@ -30,13 +30,13 @@ metadata:
     - amd64
 
 spec:
-  versionName: '1.0.20'
+  versionName: '1.0.21'
   fullDescription: >
     Rewind complements the Olares standard backup by exporting app settings,
     network configs, VPN settings, integration accounts, GPU/compute settings,
     and PostgreSQL database dumps.
     All exports are written to /Data/Backup/
-  upgradeDescription: "v1.0.20: Korrekter Userspace-PVC (pvc-userspace-aimighty-yxce0cmwdzqtayox) fuer drive/Data/rewind/Backup."
+  upgradeDescription: "v1.0.21: Exporte werden dem Olares-Benutzer (UID 1000) zugeordnet -> sichtbar in Files GUI."
   developer: Aimighty
   website: ''
   sourceCode: https://github.com/bayerhazard/rewind
