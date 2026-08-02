@@ -1,0 +1,10 @@
+workloads:
+  rewind:
+    replicaCount: 1
+
+userspace:
+  appData:
+    path: /Data/Backup
+    permission: readWrite
+
+olaresEnv: {}

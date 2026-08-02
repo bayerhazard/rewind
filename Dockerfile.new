@@ -1,0 +1,6 @@
+FROM ghcr.io/bayerhazard/rewind:1.0.6
+WORKDIR /app
+COPY backup-manager.html /app/backup-manager.html
+COPY backup-manager.py /app/backup-manager.py
+COPY logo.png /app/logo.png
+CMD ["python3", "backup-manager.py", "--port", "8765"]

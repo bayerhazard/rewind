@@ -57,6 +57,14 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
+.logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
 .header .subtitle {
   font-size: 13px;
   color: var(--text-dim);
@@ -403,21 +411,19 @@ tr:last-child td { border-bottom: none; }
 <div class="container">
   <!-- Header -->
   <div class="header">
-    <div>
-      <h1>Rewind</h1>
-      <div class="subtitle">Backup-Supplement für Olares One (Settings & DBs)</div>
-    </div>
-    <div id="connectionStatus" class="status-badge ok">
-      <span class="dot"></span>
-      <span>Running</span>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <img src="logo.png" alt="Rewind" class="logo">
+      <div>
+        <h1>Rewind</h1>
+        <div class="subtitle">Backup-Supplement für Olares One (Settings & DBs)</div>
+      </div>
     </div>
   </div>
 
   <!-- Tabs -->
   <div class="tabs">
     <button class="tab active" data-tab="overview"> Übersicht</button>
-    <button class="tab" data-tab="backups"> Backups</button>
-    <button class="tab" data-tab="export"> Export</button>
+    <button class="tab" data-tab="export"> Konfiguration</button>
     <button class="tab" data-tab="restore"> Restore</button>
   </div>
 
@@ -433,41 +439,12 @@ tr:last-child td { border-bottom: none; }
         <div class="stat-value info" id="ov-apps">—</div>
       </div>
       <div class="stat">
-        <div class="stat-label">Backup-Pläne</div>
-        <div class="stat-value info" id="ov-backups">—</div>
-      </div>
-      <div class="stat">
         <div class="stat-label">Letzter Config-Export</div>
         <div class="stat-value" id="ov-last-export">—</div>
       </div>
     </div>
 
     <div class="card" style="margin-top: 16px;">
-      <div class="card-title"><span class="icon"></span> App-Status</div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>App</th>
-              <th>Version</th>
-              <th>State</th>
-              <th>Speicher</th>
-            </tr>
-          </thead>
-          <tbody id="ov-apps-table"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title"><span class="icon"></span> Network</div>
-      <div class="grid grid-2" id="ov-network"></div>
-    </div>
-  </div>
-
-  <!-- Tab: Backups -->
-  <div id="tab-backups" class="tab-content">
-    <div class="card">
       <div class="card-title"><span class="icon"></span> Olares Backup-Pläne</div>
       <div class="table-wrap">
         <table>
@@ -499,7 +476,7 @@ tr:last-child td { border-bottom: none; }
     </div>
   </div>
 
-  <!-- Tab: Export -->
+  <!-- Tab: Konfiguration -->
   <div id="tab-export" class="tab-content">
     <div class="alert info">
       <span></span>
@@ -597,14 +574,6 @@ tr:last-child td { border-bottom: none; }
 
   <!-- Tab: Restore -->
   <div id="tab-restore" class="tab-content">
-    <div class="alert warning">
-      <span></span>
-      <div>
-        <strong>Wichtig:</strong> Ein Restore überschreibt bestehende Daten!
-        Erstelle vor einem Restore unbedingt einen aktuellen Backup.
-      </div>
-    </div>
-
     <div class="card">
       <div class="card-title"><span class="icon"></span> Restore aus Olares Backup</div>
       <p style="color: var(--text-dim); margin-bottom: 16px;">
@@ -664,7 +633,6 @@ document.querySelectorAll('.tab').forEach(tab => {
 
     // Tab-specific loads
     if (tab.dataset.tab === 'overview') loadOverview();
-    if (tab.dataset.tab === 'backups') loadBackups();
     if (tab.dataset.tab === 'analysis') loadAnalysis();
   });
 });
@@ -694,109 +662,6 @@ async function apiPost(path, data) {
     console.error('API Error:', e);
     return { error: e.message };
   }
-}
-
-// --- Connection ---
-async function showConnectDialog() {
-  // Profile laden
-  const profiles = await apiGet('/api/profiles');
-  const listEl = document.getElementById('profile-list');
-  
-  if (profiles && Array.isArray(profiles) && profiles.length > 0) {
-    listEl.innerHTML = profiles.map(p => `
-      <div style="display:flex;gap:8px;margin-bottom:4px;">
-        <button class="btn" style="flex:1;" onclick="quickConnect('${p.name}')">
-           ${p.name} (${p.host})
-        </button>
-      </div>
-    `).join('');
-  } else {
-    listEl.innerHTML = '<p style="color:var(--text-dim);font-size:12px;">Keine Profile gespeichert.</p>';
-  }
-  
-  document.getElementById('modal-connect').classList.add('active');
-}
-
-async function doConnect() {
-  const name = document.getElementById('conn-name').value.trim();
-  const host = document.getElementById('conn-host').value.trim();
-  const user = document.getElementById('conn-user').value.trim();
-  
-  if (!host) {
-    alert('Bitte Host eingeben.');
-    return;
-  }
-  
-  const btn = document.querySelector('#modal-connect .btn.primary');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Verbinde...';
-  
-  const result = await apiPost('/api/connect', {
-    host: host,
-    ssh_user: user,
-    name: name
-  });
-  
-  if (result?.success) {
-    // Profil speichern
-    await apiPost('/api/profiles/save', {
-      name: name,
-      host: host,
-      ssh_user: user
-    });
-    
-    closeModal('modal-connect');
-    updateConnectionStatus(result);
-    await loadOverview();
-    alert(` Verbunden mit ${result.olares_id || host}`);
-  } else {
-    alert(` Verbindung fehlgeschlagen: ${result?.error || 'Unbekannter Fehler'}`);
-  }
-  
-  btn.disabled = false;
-  btn.innerHTML = 'Verbinden';
-}
-
-async function quickConnect(name) {
-  const result = await apiGet(`/api/profiles/load/${name}`);
-  if (result?.success) {
-    closeModal('modal-connect');
-    const status = await apiGet('/api/status');
-    updateConnectionStatus({
-      success: true,
-      olares_id: status?.version?.olaresId,
-      host: result.host
-    });
-    await loadOverview();
-  } else {
-    alert(` Verbindung fehlgeschlagen: ${result?.error || 'Unbekannter Fehler'}`);
-  }
-}
-
-function updateConnectionStatus(result) {
-  const badge = document.getElementById('connectionStatus');
-  if (result?.success) {
-    badge.className = 'status-badge ok';
-    const id = result.olares_id || result.host || 'Verbunden';
-    badge.innerHTML = `<span class="dot"></span><span>${id}</span>`;
-  } else {
-    badge.className = 'status-badge error';
-    badge.innerHTML = '<span class="dot"></span><span>Getrennt</span>';
-  }
-}
-
-async function checkConnection() {
-  const data = await apiGet('/api/status');
-  const badge = document.getElementById('connectionStatus');
-  if (data && !data.version?.error) {
-    badge.className = 'status-badge ok';
-    const id = data.version?.olaresId || 'Verbunden';
-    badge.innerHTML = `<span class="dot"></span><span>${id}</span>`;
-  } else {
-    badge.className = 'status-badge error';
-    badge.innerHTML = '<span class="dot"></span><span>Getrennt</span>';
-  }
-  return data;
 }
 
 // --- Install ---
@@ -840,7 +705,11 @@ async function loadOverview() {
 
   // Version
   const versionEl = document.getElementById('ov-version');
-  if (status?.version?.osVersion) {
+  const verStr = typeof status?.version === 'string' ? status.version : '';
+  const osVer = verStr.match(/OS Version:\s*([^\n]+)/i);
+  if (osVer) {
+    versionEl.textContent = osVer[1].trim();
+  } else if (status?.version?.osVersion) {
     versionEl.textContent = status.version.osVersion;
   } else {
     versionEl.textContent = 'N/A';
@@ -850,10 +719,6 @@ async function loadOverview() {
   // Apps count
   const apps = Array.isArray(appsData) ? appsData : [];
   document.getElementById('ov-apps').textContent = apps.length;
-
-  // Backup plans
-  const plans = backups?.plans?.backups || [];
-  document.getElementById('ov-backups').textContent = plans.length;
 
   // Last export
   const exportStatus = await apiGet('/api/export/status');
@@ -866,43 +731,8 @@ async function loadOverview() {
     lastExportEl.className = 'stat-value';
   }
 
-  // Apps table
-  const appsTable = document.getElementById('ov-apps-table');
-  appsTable.innerHTML = apps.map(app => {
-    const name = app.name || app;
-    const version = app.version || '—';
-    const state = app.state || 'unknown';
-    const stateClass = state === 'running' ? 'running' : state === 'stopped' ? 'stopped' : 'error';
-    return `<tr>
-      <td><strong>${name}</strong></td>
-      <td>${version}</td>
-      <td><span class="tag ${stateClass}">${state}</span></td>
-      <td>—</td>
-    </tr>`;
-  }).join('');
-
-  // Network
-  const networkEl = document.getElementById('ov-network');
-  if (status?.network) {
-    networkEl.innerHTML = `
-      <div class="stat">
-        <div class="stat-label">FRP Server</div>
-        <div class="stat-value" style="font-size: 16px;">${status.network.frp_server || '—'}</div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">FRP Aktiv</div>
-        <div class="stat-value" style="font-size: 16px;">${status.network.enable_frp ? ' Ja' : ' Nein'}</div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">Reverse Proxy</div>
-        <div class="stat-value" style="font-size: 16px;">${status.network.enable_frp ? 'FRP' : '—'}</div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">External Network</div>
-        <div class="stat-value" style="font-size: 16px;">${status.network.external_network_off ? ' Aus' : ' An'}</div>
-      </div>
-    `;
-  }
+  // Backups content (Pläne + Config-Exporte) lives in the Overview tab now
+  loadBackups();
 }
 
 // --- Backups ---
@@ -1221,16 +1051,12 @@ async function confirmRestore() {
 
 // --- Init ---
 (async function init() {
-  await checkConnection();
   await loadOverview();
 
   // Auto-refresh alle 60 Sekunden
   setInterval(async () => {
-    await checkConnection();
     const activeTab = document.querySelector('.tab.active');
     if (activeTab?.dataset.tab === 'overview') await loadOverview();
-    if (activeTab?.dataset.tab === 'backups') await loadBackups();
-    if (activeTab?.dataset.tab === 'archives') await loadArchives();
     if (activeTab?.dataset.tab === 'analysis') loadAnalysis();
   }, 60000);
 })();

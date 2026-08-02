@@ -1,4 +1,4 @@
 apiVersion: v2
-name: rewind
-version: 1.0.9
 description: Olares Backup Supplement — Settings & Database Backup Manager
+name: rewind
+version: 1.0.6

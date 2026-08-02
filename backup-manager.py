@@ -49,6 +49,9 @@ def run_cmd(command, timeout=60):
         }
     except subprocess.TimeoutExpired:
         return {"exit_code": -1, "stdout": "", "stderr": "Timeout", "success": False}
+    except FileNotFoundError:
+        # olares-cli not found — return structured error instead of crashing
+        return {"exit_code": -1, "stdout": "", "stderr": f"Command not found: {command.split()[0]}", "success": False}
     except Exception as e:
         return {"exit_code": -1, "stdout": "", "stderr": str(e), "success": False}
 
@@ -391,6 +394,19 @@ class BackupHandler(BaseHTTPRequestHandler):
                     self.wfile.write(html.encode("utf-8"))
                 else:
                     self.send_json({"error": "backup-manager.html not found"}, 404)
+            elif path == "/logo.png":
+                logo_path = "/app/logo.png"
+                if os.path.exists(logo_path):
+                    with open(logo_path, "rb") as f:
+                        logo = f.read()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/png")
+                    self.send_header("Content-Length", str(len(logo)))
+                    self.send_header("Cache-Control", "no-cache")
+                    self.end_headers()
+                    self.wfile.write(logo)
+                else:
+                    self.send_json({"error": "logo.png not found"}, 404)
             else:
                 self.send_json({"error": f"Unknown endpoint: {path}"}, 404)
         except Exception as e:

@@ -1,5 +1,16 @@
 FROM python:3.12-slim
 
+# Copy pre-built node + olares-cli bundle
+COPY node-bundle /node
+
+# Set up PATH for node
+ENV PATH="/node/bin:$PATH"
+
+# Create olares-cli wrapper script
+RUN echo '#!/bin/sh' > /usr/local/bin/olares-cli && \
+    echo 'exec /node/bin/node /node/lib/node_modules/@olares/cli/bin/olares-cli.js "$@"' >> /usr/local/bin/olares-cli && \
+    chmod +x /usr/local/bin/olares-cli
+
 WORKDIR /app
 
 COPY backup-manager.py .
