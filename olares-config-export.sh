@@ -178,6 +178,40 @@ main() {
         users_me=$(run_cmd "users-me" settings users me)
         save_json "${CONFIG_DIR}/users/role.json" "$users_me" "ok"
 
+        # --- User-Profil (Anzeigename, Beschreibung, Avatar) ---
+        log ""
+        log "User profile..."
+        local profile_data
+        profile_data=$(run_cmd "user-profile" settings users list)
+        save_json "${CONFIG_DIR}/profile/users.json" "$profile_data" "ok"
+
+        # Avatar-Datei herunterladen (URL aus users.json, öffentlich auslieferbar)
+        local avatar_url
+        avatar_url=$(echo "$profile_data" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    if isinstance(data, list) and data:
+        print(data[0].get('avatar', ''))
+except:
+    pass
+" 2>/dev/null)
+        if [ -n "$avatar_url" ] && ! $DRY_RUN; then
+            mkdir -p "${CONFIG_DIR}/profile"
+            if python3 -c "
+import urllib.request, sys
+try:
+    urllib.request.urlretrieve('$avatar_url', '${CONFIG_DIR}/profile/avatar.png')
+    print('ok')
+except Exception as e:
+    print('err', e)
+" 2>/dev/null | grep -q ok; then
+                log_ok "Avatar gespeichert"
+            else
+                log_warn "Avatar konnte nicht geladen werden"
+            fi
+        fi
+
         # --- Appearance ---
         log ""
         log "Appearance..."
