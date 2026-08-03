@@ -18,8 +18,10 @@
   --b-500:#4a6c95; --b-600:#708bab; --b-700:#9bafc6;
   --b-800:#c6d2e0; --b-900:#e6ebf1;
 
-  /* Signal — ein Akzent */
-  --marke:#6c8cff; --marke-hell:#8aa4ff; --marke-tief:#4a6ae0;
+  /* Signal — ein Akzent (AImighty-Gold) */
+  --gold:#c9a45c; --gold-hell:#d5b371; --gold-tief:#b28b42;
+  --marke:var(--gold); --marke-hell:var(--gold-hell); --marke-tief:var(--gold-tief);
+  --auf-marke:var(--b-25);
 
   /* Semantische Aliase (bestandskompatibel: --surface/--border/... bleiben) */
   --bg:var(--b-50);
@@ -114,7 +116,7 @@ body{
   cursor:pointer;border-radius:6px;transition:color .16s ease,background-color .16s ease;
 }
 .tab:hover{color:var(--text-stark);background:var(--surface2)}
-.tab.active{background:var(--marke);color:#fff}
+.tab.active{background:var(--marke);color:var(--auf-marke)}
 .tab-content{display:none}
 .tab-content.active{display:block}
 
@@ -171,7 +173,7 @@ body{
   transition:background-color .16s ease,border-color .16s ease,color .16s ease;
 }
 .btn:hover{border-color:var(--marke-rand);background:var(--marke-flaeche);color:var(--text-stark)}
-.btn.primary{background:var(--marke);border-color:var(--marke);color:#fff}
+.btn.primary{background:var(--marke);border-color:var(--marke);color:var(--auf-marke)}
 .btn.primary:hover{background:var(--marke-hell);border-color:var(--marke-hell)}
 .btn.danger{background:var(--error-bg);border-color:color-mix(in oklab, var(--error) 55%, transparent);color:var(--error)}
 .btn.danger:hover{background:color-mix(in oklab, var(--error) 22%, transparent);border-color:var(--error)}
