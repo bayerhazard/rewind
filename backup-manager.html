@@ -471,9 +471,9 @@ tr:last-child td { border-bottom: none; }
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="export-details-card" style="display: none;">
       <div class="card-title"><span class="icon"></span> Export-Details (Klicke auf einen Export)</div>
-      <div id="export-details" style="color: var(--text-dim);">Wähle einen Export aus der Liste oben.</div>
+      <div id="export-details" style="color: var(--text-dim);"></div>
     </div>
   </div>
 
@@ -490,7 +490,7 @@ tr:last-child td { border-bottom: none; }
 
     <div class="btn-group">
       <button class="btn primary" id="btn-export-config" onclick="doExport()">
-         Config-Export starten
+         Backup starten
       </button>
     </div>
 
@@ -573,11 +573,10 @@ tr:last-child td { border-bottom: none; }
   <!-- Tab: Restore -->
   <div id="tab-restore" class="tab-content">
     <div class="card">
-      <div class="card-title"><span class="icon"></span> App-Einstellungen wiederherstellen</div>
+      <div class="card-title"><span class="icon"></span> Wiederherstellen</div>
       <p style="color: var(--text-dim); margin-bottom: 16px;">
-        Wähle einen Config-Export und die Apps, deren Einstellungen (env, Domain, Policy)
-        wiederhergestellt werden sollen. Es werden nur App-Einstellungen überschrieben —
-        keine Daten, kein System, kein Netzwerk.
+        Wähle einen Config-Export und die Kategorien, die wiederhergestellt werden sollen.
+        Es werden nur Einstellungen überschrieben — keine Daten.
       </p>
       <div class="form-group">
         <label>Config-Export (Datum)</label>
@@ -585,11 +584,20 @@ tr:last-child td { border-bottom: none; }
           <option value="">— Bitte Export wählen —</option>
         </select>
       </div>
+      <div style="margin-top: 12px;">
+        <label style="font-weight: 600;">Wiederherstellen:</label>
+        <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 6px;">
+          <label style="font-size: 14px;"><input type="checkbox" class="restore-cat" value="apps" checked onchange="toggleRestoreCategories()"> App-Einstellungen</label>
+          <label style="font-size: 14px;"><input type="checkbox" class="restore-cat" value="network" onchange="toggleRestoreCategories()"> Netzwerk</label>
+          <label style="font-size: 14px;"><input type="checkbox" class="restore-cat" value="vpn" onchange="toggleRestoreCategories()"> VPN</label>
+          <label style="font-size: 14px;"><input type="checkbox" class="restore-cat" value="system" onchange="toggleRestoreCategories()"> System & Sprache</label>
+        </div>
+      </div>
       <div id="restore-apps-box" style="margin-top: 12px;">
         <p style="color: var(--text-dim);">Wähle zuerst einen Export, um die verfügbaren Apps zu laden.</p>
       </div>
       <div class="btn-group" style="margin-top: 16px;">
-        <button class="btn primary" onclick="doRestore()"> Ausgewählte Apps wiederherstellen</button>
+        <button class="btn primary" onclick="doRestore()"> Ausgewählte Kategorien wiederherstellen</button>
       </div>
     </div>
 
@@ -787,6 +795,8 @@ async function loadBackups() {
 async function viewExport(date) {
   const data = await apiGet(`/api/export/details/${date}`);
   const result = document.getElementById('export-details');
+  const card = document.getElementById('export-details-card');
+  if (card) card.style.display = '';
   
   if (!data || data.error) {
     result.innerHTML = '<div class="alert warning"> Details nicht verfügbar</div>';
@@ -876,22 +886,22 @@ async function doExport() {
   const btn = document.getElementById('btn-export-config');
 
   btn.disabled = true;
-  btn.innerHTML = `<span class="spinner"></span> Config-Export wird gestartet...`;
-  logEl.innerHTML = `<span class="line">▶ Starte Config-Export...</span>`;
+  btn.innerHTML = `<span class="spinner"></span> Backup wird gestartet...`;
+  logEl.innerHTML = `<span class="line">▶ Starte Backup (Config-Export)...</span>`;
 
   const result = await apiPost('/api/export/config', {});
 
   if (result?.status === 'started' || result?.status === 'running') {
-    logEl.innerHTML += `\n<span class="line"> Config-Export läuft im Hintergrund (mehrere Minuten)...</span>`;
+    logEl.innerHTML += `\n<span class="line"> Backup (Config-Export) läuft im Hintergrund (mehrere Minuten)...</span>`;
     const poll = setInterval(async () => {
       const st = await apiGet('/api/export/status');
       const kind = st?.config;
       if (!kind || kind.status !== 'running') {
         clearInterval(poll);
         btn.disabled = false;
-        btn.innerHTML = ' Config-Export starten';
+        btn.innerHTML = ' Backup starten';
         if (kind?.status === 'success') {
-          logEl.innerHTML += `\n<span class="line ok"> Config-Export erfolgreich!</span>\n`;
+          logEl.innerHTML += `\n<span class="line ok"> Backup erfolgreich!</span>\n`;
           logEl.innerHTML += `<span class="line ok"> Ziel: /Data/Backup/config/${kind.date || ''}/</span>`;
         } else {
           logEl.innerHTML += `\n<span class="line err"> Fehler: ${kind?.output || kind?.message || 'Unbekannt'}</span>`;
@@ -900,15 +910,15 @@ async function doExport() {
       }
     }, 5000);
   } else if (result?.status === 'success') {
-    logEl.innerHTML += `\n<span class="line ok"> Config-Export erfolgreich!</span>\n`;
+    logEl.innerHTML += `\n<span class="line ok"> Backup erfolgreich!</span>\n`;
     logEl.innerHTML += `<span class="line ok"> Ziel: /Data/Backup/config/${result.date || ''}/</span>`;
     btn.disabled = false;
-    btn.innerHTML = ' Config-Export starten';
+    btn.innerHTML = ' Backup starten';
     loadOverview();
   } else {
     logEl.innerHTML += `\n<span class="line err"> Fehler: ${result?.output || result?.error || 'Unbekannt'}</span>`;
     btn.disabled = false;
-    btn.innerHTML = ' Config-Export starten';
+    btn.innerHTML = ' Backup starten';
     loadOverview();
   }
 }
@@ -1066,23 +1076,42 @@ function updateRestoreSelection() {
   restoreAppsSelected = Array.from(document.querySelectorAll('.restore-app-cb:checked')).map(cb => cb.value);
 }
 
+function toggleRestoreCategories() {
+  const appsChecked = document.querySelector('.restore-cat[value="apps"]')?.checked;
+  const box = document.getElementById('restore-apps-box');
+  if (box) box.style.display = appsChecked ? '' : 'none';
+  if (appsChecked) loadRestoreApps();
+}
+
+function getSelectedCategories() {
+  return Array.from(document.querySelectorAll('.restore-cat:checked')).map(cb => cb.value);
+}
+
 function doRestore() {
   const date = document.getElementById('restore-date').value;
   if (!date) {
     alert('Bitte wähle zuerst einen Config-Export.');
     return;
   }
-  if (restoreAppsSelected.length === 0) {
-    alert('Bitte wähle mindestens eine App.');
+  const cats = getSelectedCategories();
+  if (cats.length === 0) {
+    alert('Bitte wähle mindestens eine Kategorie.');
+    return;
+  }
+  if (cats.includes('apps') && restoreAppsSelected.length === 0) {
+    alert('Bitte wähle mindestens eine App (Kategorie App-Einstellungen).');
     return;
   }
 
-  document.getElementById('modal-restore-info').innerHTML = `
-    <p>App-Einstellungen werden überschrieben!</p>
+  let info = `<p>Einstellungen werden überschrieben!</p>
     <p><strong>Export:</strong> ${date}</p>
-    <p><strong>Apps (${restoreAppsSelected.length}):</strong> ${restoreAppsSelected.join(', ')}</p>
-    <p style="color: var(--warning);">Nur App-Einstellungen (env, Domain, Policy) werden angewendet — keine Daten.</p>
-  `;
+    <p><strong>Kategorien:</strong> ${cats.join(', ')}</p>`;
+  if (cats.includes('apps')) {
+    info += `<p><strong>Apps (${restoreAppsSelected.length}):</strong> ${restoreAppsSelected.join(', ')}</p>`;
+  }
+  info += `<p style="color: var(--warning);">Nur Einstellungen werden angewendet — keine Daten.</p>`;
+
+  document.getElementById('modal-restore-info').innerHTML = info;
   document.getElementById('modal-restore').classList.add('active');
 }
 
@@ -1097,6 +1126,7 @@ async function confirmRestore() {
 
   const result = await apiPost('/api/restore', {
     date: document.getElementById('restore-date').value,
+    categories: getSelectedCategories(),
     apps: restoreAppsSelected
   });
 

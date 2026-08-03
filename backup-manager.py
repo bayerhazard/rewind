@@ -260,44 +260,12 @@ def read_export_json(date_str, rel_path):
         return parse_json(content)
     return None
 
-def perform_restore(date_str, apps=None):
-    log_msg = []
-    all_success = True
-
-    log_msg.append(f"Restore der App-Einstellungen aus Export {date_str}...")
-    log_msg.append(f"Quelle: {CONFIG_DIR}/{date_str}")
-    log_msg.append("")
-
-    # 1. Verify export exists
-    r = run_cmd(f"test -d {CONFIG_DIR}/{date_str} && echo EXISTS || echo MISSING")
-    if not r["success"] or "MISSING" in r["stdout"]:
-        return {"success": False, "error": f"Export {date_str} not found at {CONFIG_DIR}/", "log": log_msg}
-
-    log_msg.append("Export-Verzeichnis verifiziert.")
-
-    # 2. Available apps
-    available = list_export_apps(date_str)
-    if not available:
-        log_msg.append("Keine App-Einstellungen in diesem Export gefunden.")
-        return {"success": True, "date": date_str, "log": "\n".join(log_msg)}
-
-    if apps is None:
-        selected = available
-    else:
-        selected = [a for a in apps if a in available]
-
-    if not selected:
-        log_msg.append("Keine Apps fuer den Restore ausgewaehlt.")
-        return {"success": True, "date": date_str, "log": "\n".join(log_msg)}
-
-    log_msg.append(f"{len(selected)} App(s) ausgewaehlt: {', '.join(selected)}")
-    log_msg.append("")
-
-    # 3. Restore App Settings (Domain + Policy pro Entrance)
-    for app in selected:
+def _restore_app_settings(date_str, apps, log_msg):
+    all_ok = True
+    for app in apps:
         log_msg.append(f"-> {app}")
 
-        # env.json enthaelt nur Var-Definitionen (keine Werte) — nicht wiederherstellbar, nur informativ
+        # env.json enthaelt nur Var-Definitionen (keine Werte) — nicht wiederherstellbar
         env_data = read_export_json(date_str, f"apps/{app}/env.json")
         if env_data:
             log_msg.append("  -- env.json: nur Definitionen, keine Werte (nicht wiederherstellbar)")
@@ -325,7 +293,7 @@ def perform_restore(date_str, apps=None):
                             log_msg.append(f"  OK: {app}/{entrance} domain -> {third_level}")
                         else:
                             log_msg.append(f"  WARN: {app}/{entrance} domain failed: {r['stderr'][:80]}")
-                            all_success = False
+                            all_ok = False
                     else:
                         log_msg.append(f"  -- {app}/{entrance}: kein third_level gesetzt")
 
@@ -339,14 +307,133 @@ def perform_restore(date_str, apps=None):
                             log_msg.append(f"  OK: {app}/{entrance} policy -> {default_policy}")
                         else:
                             log_msg.append(f"  WARN: {app}/{entrance} policy failed: {r['stderr'][:80]}")
-                            all_success = False
+                            all_ok = False
                     elif default_policy:
                         log_msg.append(f"  -- {app}/{entrance}: policy-Wert '{default_policy}' nicht gueltig, uebersprungen")
                     else:
                         log_msg.append(f"  -- {app}/{entrance}: kein default_policy")
 
         log_msg.append("")
+    return all_ok
 
+
+def perform_restore(date_str, categories=None, apps=None):
+    log_msg = []
+    all_success = True
+
+    if categories is None or len(categories) == 0:
+        categories = ["apps"]
+
+    log_msg.append(f"Restore aus Export {date_str}...")
+    log_msg.append(f"Quelle: {CONFIG_DIR}/{date_str}")
+    log_msg.append(f"Kategorien: {', '.join(categories)}")
+    log_msg.append("")
+
+    # 1. Verify export exists
+    r = run_cmd(f"test -d {CONFIG_DIR}/{date_str} && echo EXISTS || echo MISSING")
+    if not r["success"] or "MISSING" in r["stdout"]:
+        return {"success": False, "error": f"Export {date_str} not found at {CONFIG_DIR}/", "log": log_msg}
+
+    log_msg.append("Export-Verzeichnis verifiziert.")
+    log_msg.append("")
+
+    # 2. App-Einstellungen (Domain + Policy pro Entrance)
+    if "apps" in categories:
+        available = list_export_apps(date_str)
+        if not available:
+            log_msg.append("Keine App-Einstellungen in diesem Export gefunden.")
+        else:
+            if apps is None:
+                selected = available
+            else:
+                selected = [a for a in apps if a in available]
+
+            if not selected:
+                log_msg.append("Keine Apps fuer den Restore ausgewaehlt.")
+            else:
+                log_msg.append(f"{len(selected)} App(s) ausgewaehlt: {', '.join(selected)}")
+                log_msg.append("")
+                if not _restore_app_settings(date_str, selected, log_msg):
+                    all_success = False
+    # 3. Netzwerk (reverse-proxy + overlay)
+    if "network" in categories:
+        log_msg.append("")
+        log_msg.append("--- Netzwerk ---")
+        rp = read_export_json(date_str, "network/reverse-proxy.json")
+        if rp and isinstance(rp, dict):
+            if rp.get("enable_frp"):
+                cmd = f"{OLARES_CLI} settings network reverse-proxy set --mode frp"
+                if rp.get("frp_server"):
+                    cmd += f" --frp-server {rp['frp_server']}"
+                if rp.get("frp_auth_method"):
+                    cmd += f" --frp-auth-method {rp['frp_auth_method']}"
+                r = run_cmd(cmd, timeout=25)
+                log_msg.append(f"  {'OK' if r['success'] else 'WARN'}: reverse-proxy -> FRP")
+                if not r["success"]:
+                    all_success = False
+            elif rp.get("external_network_off"):
+                r = run_cmd(f"{OLARES_CLI} settings network reverse-proxy set --mode off", timeout=25)
+                log_msg.append(f"  {'OK' if r['success'] else 'WARN'}: reverse-proxy -> off")
+                if not r["success"]:
+                    all_success = False
+            else:
+                log_msg.append("  -- reverse-proxy: keine wiederherstellbare Konfiguration")
+        else:
+            log_msg.append("  -- kein network/reverse-proxy.json im Export")
+
+        ov = read_export_json(date_str, "network/overlay.json")
+        if ov and isinstance(ov, dict):
+            if ov.get("status") == "on":
+                r = run_cmd(f"{OLARES_CLI} settings network overlay enable", timeout=25)
+                log_msg.append(f"  {'OK' if r['success'] else 'WARN'}: overlay -> on")
+                if not r["success"]:
+                    all_success = False
+            else:
+                log_msg.append("  -- overlay: Status 'off' (Standard), nichts zu tun")
+        else:
+            log_msg.append("  -- kein network/overlay.json im Export")
+
+    # 4. VPN (ACL)
+    if "vpn" in categories:
+        log_msg.append("")
+        log_msg.append("--- VPN ---")
+        acl = read_export_json(date_str, "vpn/acl.json")
+        flags = []
+        if isinstance(acl, dict):
+            for proto in ("tcp", "udp", "any-proto"):
+                rules = acl.get(proto)
+                if isinstance(rules, list):
+                    for rule in rules:
+                        dst = None
+                        if isinstance(rule, dict):
+                            dst = rule.get("dst") or rule.get("target") or rule.get("destination")
+                        elif isinstance(rule, str):
+                            dst = rule
+                        if dst:
+                            flags.append(f"--{proto} {dst}")
+        if flags:
+            r = run_cmd(f"{OLARES_CLI} settings vpn acl set " + " ".join(flags), timeout=25)
+            log_msg.append(f"  {'OK' if r['success'] else 'WARN'}: VPN ACL ({len(flags)} Regeln)")
+            if not r["success"]:
+                all_success = False
+        else:
+            log_msg.append("  -- VPN ACL: keine setzbaren Regeln im Export")
+
+    # 5. System & Sprache (appearance language)
+    if "system" in categories:
+        log_msg.append("")
+        log_msg.append("--- System & Sprache ---")
+        appr = read_export_json(date_str, "appearance.json")
+        if appr and isinstance(appr, dict) and appr.get("language"):
+            lang = appr["language"]
+            r = run_cmd(f"{OLARES_CLI} settings appearance language set {lang}", timeout=25)
+            log_msg.append(f"  {'OK' if r['success'] else 'WARN'}: Sprache -> {lang}")
+            if not r["success"]:
+                all_success = False
+        else:
+            log_msg.append("  -- kein appearance.json / Sprache im Export")
+
+    log_msg.append("")
     log_msg.append("=" * 50)
     if all_success:
         log_msg.append("Restore abgeschlossen!")
@@ -469,14 +556,15 @@ class BackupHandler(BaseHTTPRequestHandler):
 
             elif path == "/api/restore":
                 date_str = data.get("date", "")
+                categories = data.get("categories")
                 apps = data.get("apps")
                 if not date_str:
                     self.send_json({"error": "Missing 'date' parameter"}, 400)
                 else:
-                    if not isinstance(apps, list) or len(apps) == 0:
-                        self.send_json({"error": "Bitte mindestens eine App für den Restore auswählen"}, 400)
+                    if not isinstance(categories, list) or len(categories) == 0:
+                        self.send_json({"error": "Bitte mindestens eine Kategorie für den Restore auswählen"}, 400)
                     else:
-                        self.send_json(perform_restore(date_str, apps))
+                        self.send_json(perform_restore(date_str, categories, apps))
 
             else:
                 self.send_json({"error": f"Unknown POST endpoint: {path}"}, 404)

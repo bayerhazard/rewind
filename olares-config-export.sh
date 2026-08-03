@@ -165,25 +165,41 @@ main() {
     me_info=$(run_cmd "whoami" settings me whoami)
     save_json "${CONFIG_DIR}/system/whoami.json" "$me_info" "ok"
 
-    # --- 2. Integration Accounts ---
+    # --- 2. Network Configuration (reverse-proxy + overlay) ---
+    log "Network configuration..."
+    local rp_info
+    rp_info=$(run_cmd "reverse-proxy" settings network reverse-proxy get)
+    save_json "${CONFIG_DIR}/network/reverse-proxy.json" "$rp_info" "ok"
+
+    local overlay_status
+    overlay_status=$(run_cmd "overlay" settings network overlay status)
+    save_json "${CONFIG_DIR}/network/overlay.json" "$overlay_status" "ok"
+
+    # --- 3. VPN Configuration (ACL) ---
+    log "VPN configuration..."
+    local vpn_acl
+    vpn_acl=$(run_cmd "vpn-acl" settings vpn acl all)
+    save_json "${CONFIG_DIR}/vpn/acl.json" "$vpn_acl" "ok"
+
+    # --- 4. Integration Accounts ---
     log "Integration accounts..."
     local integration_accounts
     integration_accounts=$(run_cmd "integration" settings integration accounts list)
     save_json "${CONFIG_DIR}/integration/accounts.json" "$integration_accounts" "ok"
 
-    # --- 3. Users ---
+    # --- 5. Users ---
     log "Users..."
     local users_me
     users_me=$(run_cmd "users-me" settings users me)
     save_json "${CONFIG_DIR}/users/role.json" "$users_me" "ok"
 
-    # --- 4. Appearance ---
+    # --- 6. Appearance ---
     log "Appearance..."
     local appearance
     appearance=$(run_cmd "appearance" settings appearance get)
     save_json "${CONFIG_DIR}/appearance.json" "$appearance" "ok"
 
-    # --- 5. Advanced / Developer ---
+    # --- 7. Advanced / Developer ---
     log "Advanced settings..."
     local advanced_env
     advanced_env=$(run_cmd "advanced-env" settings advanced env list 2>/dev/null || echo '{"status": "unavailable"}')
@@ -193,7 +209,7 @@ main() {
     advanced_containerd=$(run_cmd "advanced-containerd" settings advanced containerd get 2>/dev/null || echo '{"status": "unavailable"}')
     save_json "${CONFIG_DIR}/advanced/containerd.json" "$advanced_containerd" "ok"
 
-    # --- 6. GPU ---
+    # --- 8. GPU ---
     log "GPU settings..."
     local gpu_mode
     gpu_mode=$(run_cmd "gpu-mode" settings gpu mode get 2>/dev/null || echo '{"status": "unavailable"}')
@@ -203,31 +219,31 @@ main() {
     gpu_apps=$(run_cmd "gpu-apps" settings gpu apps list 2>/dev/null || echo '{"status": "unavailable"}')
     save_json "${CONFIG_DIR}/gpu/apps.json" "$gpu_apps" "ok"
 
-    # --- 7. Compute / Accelerator ---
+    # --- 9. Compute / Accelerator ---
     log "Compute settings..."
     local compute
     compute=$(run_cmd "compute" settings compute list 2>/dev/null || echo '{"status": "unavailable"}')
     save_json "${CONFIG_DIR}/compute/settings.json" "$compute" "ok"
 
-    # --- 8. Video ---
+    # --- 10. Video ---
     log "Video settings..."
     local video
     video=$(run_cmd "video" settings video get 2>/dev/null || echo '{"status": "unavailable"}')
     save_json "${CONFIG_DIR}/video/settings.json" "$video" "ok"
 
-    # --- 9. Backup Plans (Olares standard backup config) ---
+    # --- 11. Backup Plans (Olares standard backup config) ---
     log "Backup plans..."
     local backup_plans
     backup_plans=$(run_cmd "backup-plans" settings backup plans list)
     save_json "${CONFIG_DIR}/backup/plans.json" "$backup_plans" "ok"
 
-    # --- 10. Restore Plans ---
+    # --- 12. Restore Plans ---
     log "Restore plans..."
     local restore_plans
     restore_plans=$(run_cmd "restore-plans" settings restore plans list 2>/dev/null || echo '{"status": "unavailable"}')
     save_json "${CONFIG_DIR}/restore/plans.json" "$restore_plans" "ok"
 
-    # --- 11. App Settings (all installed apps) ---
+    # --- 13. App Settings (all installed apps) ---
     log "App settings (all installed apps)..."
     local apps_json
     apps_json=$(run_cmd "market-list" market list --mine)
