@@ -25,8 +25,9 @@ from zoneinfo import ZoneInfo
 # --- Config ------------------------------------------------------------------
 DEFAULT_PORT = 8765
 OLARES_CLI = "olares-cli"
-BACKUP_DIR = "/Data/Backup"
-CONFIG_DIR = f"{BACKUP_DIR}/config"
+# /Data ist der Mount auf den Olares-Userspace (Data/rewind); Exporte liegen unter /Data/<datum>/
+BACKUP_DIR = "/Data"
+CONFIG_DIR = "/Data"
 
 # Zeitzone für die Uhrzeit-Eingabe (MEZ/MESZ = Europe/Berlin)
 SCHEDULE_TZ = ZoneInfo("Europe/Berlin")
@@ -158,13 +159,21 @@ def list_export_apps(date_str):
         return []
     return [os.path.basename(d.rstrip("/")) for d in r["stdout"].strip().split("\n") if d.strip()]
 
-def _run_export_background():
+def _run_export_background(apps=None, categories=None):
     timestamp = datetime.now().strftime("%Y-%m-%d")
     script = "olares-config-export.sh"
     cmd = f"bash /app/{script} 2>&1"
 
+    # Kategorie-/App-Auswahl an das Skript durchreichen (Env-Vars)
+    env = dict(os.environ)
+    env["EXPORT_SYSTEM"] = "1" if categories is None or "system" in categories else "0"
+    env["EXPORT_NETWORK"] = "1" if categories is None or "network" in categories else "0"
+    env["EXPORT_VPN"] = "1" if categories is None or "vpn" in categories else "0"
+    env["EXPORT_APPS_CATEGORY"] = "1" if categories is None or "apps" in categories else "0"
+    env["EXPORT_APPS"] = ",".join(apps) if apps else ""
+
     # Lange Laufzeit (30+ olares-cli-Calls + Pro-App-Calls) — 15 Min Budget.
-    r = run_cmd(cmd, timeout=900)
+    r = run_cmd_with_env(cmd, env=env, timeout=900)
 
     # Exporte dem Olares-Benutzer (UID 1000) zuordnen, damit sie in der
     # Olares Files GUI sichtbar sind (der Container läuft als root).
@@ -189,11 +198,26 @@ def _run_export_background():
             last_export["status"] = "error"
 
 
-def trigger_export():
+def run_cmd_with_env(command, env=None, timeout=60):
+    import subprocess as sp
+    try:
+        result = sp.run(
+            command, shell=True, capture_output=True, text=True,
+            timeout=timeout, env=env
+        )
+        return {"exit_code": result.returncode, "stdout": result.stdout,
+                "stderr": result.stderr, "success": result.returncode == 0}
+    except sp.TimeoutExpired:
+        return {"exit_code": -1, "stdout": "", "stderr": "Timeout", "success": False}
+    except Exception as e:
+        return {"exit_code": -1, "stdout": "", "stderr": str(e), "success": False}
+
+
+def trigger_export(apps=None, categories=None):
     with export_lock:
         current = last_export.get("config")
         if current and current.get("status") == "running":
-            return {"status": "running", "message": "Config-Export läuft bereits"}
+            return {"status": "running", "message": "Backup läuft bereits"}
         last_export["config"] = {
             "timestamp": None,
             "date": datetime.now().strftime("%Y-%m-%d"),
@@ -202,9 +226,9 @@ def trigger_export():
         }
         last_export["status"] = "running"
 
-    t = threading.Thread(target=_run_export_background, daemon=True)
+    t = threading.Thread(target=_run_export_background, args=(apps, categories), daemon=True)
     t.start()
-    return {"status": "started", "message": "Config-Export läuft im Hintergrund (mehrere Minuten)"}
+    return {"status": "started", "message": "Backup läuft im Hintergrund (mehrere Minuten)"}
 
 
 # --- Täglicher Auto-Export (In-App-Cron) ------------------------------------
@@ -533,7 +557,15 @@ class BackupHandler(BaseHTTPRequestHandler):
                 data = {}
 
             if path == "/api/export/config":
-                self.send_json(trigger_export())
+                cats = data.get("categories")
+                apps = data.get("apps")
+                if cats is not None and (not isinstance(cats, list) or len(cats) == 0):
+                    self.send_json({"error": "Bitte mindestens eine Kategorie für das Backup auswählen"}, 400)
+                    return
+                if apps is not None and not isinstance(apps, list):
+                    self.send_json({"error": "Apps muss eine Liste sein"}, 400)
+                    return
+                self.send_json(trigger_export(apps, cats))
 
             elif path == "/api/export/schedule":
                 t = (data.get("time") or "").strip()

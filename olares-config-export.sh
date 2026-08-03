@@ -54,7 +54,7 @@ fi
 OLARES_CLI="olares-cli"
 DATE=$(date +%Y-%m-%d)
 TIMESTAMP=$(date +%Y-%m-%dT%H:%M:%S%z)
-CONFIG_DIR="/Data/Backup/config/${DATE}"
+CONFIG_DIR="/Data/${DATE}"
 
 DRY_RUN=false
 if [[ "${1:-}" == "--dry-run" ]]; then
@@ -148,108 +148,136 @@ main() {
     log "Target: ${CONFIG_DIR}"
     log "============================================================"
 
+    # Kategorie-Auswahl (Env-Vars, Default alle an)
+    # EXPORT_APPS_CATEGORY / EXPORT_NETWORK / EXPORT_VPN / EXPORT_SYSTEM = 1|0
+    # EXPORT_APPS = kommagetrennte App-Liste (leer = alle Apps)
+    log "Kategorien: system=${EXPORT_SYSTEM:-1} network=${EXPORT_NETWORK:-1} vpn=${EXPORT_VPN:-1} apps=${EXPORT_APPS_CATEGORY:-1}"
+    if [ -n "${EXPORT_APPS:-}" ]; then
+        log "Ausgewaehlte Apps: ${EXPORT_APPS}"
+    fi
+
     if $DRY_RUN; then
         log "DRY-RUN mode — no files will be written"
     fi
 
     health_check
 
-    # --- 1. System Info ---
-    log ""
-    log "System info..."
-    local version_info
-    version_info=$(run_cmd "version" settings me version)
-    save_json "${CONFIG_DIR}/system/olares-info.json" "$version_info" "ok"
+    # --- System-Kategorie ---
+    if [ "${EXPORT_SYSTEM:-1}" = "1" ]; then
+        # --- 1. System Info ---
+        log ""
+        log "System info..."
+        local version_info
+        version_info=$(run_cmd "version" settings me version)
+        save_json "${CONFIG_DIR}/system/olares-info.json" "$version_info" "ok"
 
-    local me_info
-    me_info=$(run_cmd "whoami" settings me whoami)
-    save_json "${CONFIG_DIR}/system/whoami.json" "$me_info" "ok"
+        local me_info
+        me_info=$(run_cmd "whoami" settings me whoami)
+        save_json "${CONFIG_DIR}/system/whoami.json" "$me_info" "ok"
 
-    # --- 2. Network Configuration (reverse-proxy + overlay) ---
-    log "Network configuration..."
-    local rp_info
-    rp_info=$(run_cmd "reverse-proxy" settings network reverse-proxy get)
-    save_json "${CONFIG_DIR}/network/reverse-proxy.json" "$rp_info" "ok"
+        # --- Integration Accounts ---
+        log ""
+        log "Integration accounts..."
+        local integration_accounts
+        integration_accounts=$(run_cmd "integration" settings integration accounts list)
+        save_json "${CONFIG_DIR}/integration/accounts.json" "$integration_accounts" "ok"
 
-    local overlay_status
-    overlay_status=$(run_cmd "overlay" settings network overlay status)
-    save_json "${CONFIG_DIR}/network/overlay.json" "$overlay_status" "ok"
+        # --- Users ---
+        log ""
+        log "Users..."
+        local users_me
+        users_me=$(run_cmd "users-me" settings users me)
+        save_json "${CONFIG_DIR}/users/role.json" "$users_me" "ok"
 
-    # --- 3. VPN Configuration (ACL) ---
-    log "VPN configuration..."
-    local vpn_acl
-    vpn_acl=$(run_cmd "vpn-acl" settings vpn acl all)
-    save_json "${CONFIG_DIR}/vpn/acl.json" "$vpn_acl" "ok"
+        # --- Appearance ---
+        log ""
+        log "Appearance..."
+        local appearance
+        appearance=$(run_cmd "appearance" settings appearance get)
+        save_json "${CONFIG_DIR}/appearance.json" "$appearance" "ok"
 
-    # --- 4. Integration Accounts ---
-    log "Integration accounts..."
-    local integration_accounts
-    integration_accounts=$(run_cmd "integration" settings integration accounts list)
-    save_json "${CONFIG_DIR}/integration/accounts.json" "$integration_accounts" "ok"
+        # --- Advanced / Developer ---
+        log ""
+        log "Advanced settings..."
+        local advanced_env
+        advanced_env=$(run_cmd "advanced-env" settings advanced env list 2>/dev/null || echo '{"status": "unavailable"}')
+        save_json "${CONFIG_DIR}/advanced/env.json" "$advanced_env" "ok"
 
-    # --- 5. Users ---
-    log "Users..."
-    local users_me
-    users_me=$(run_cmd "users-me" settings users me)
-    save_json "${CONFIG_DIR}/users/role.json" "$users_me" "ok"
+        local advanced_containerd
+        advanced_containerd=$(run_cmd "advanced-containerd" settings advanced containerd get 2>/dev/null || echo '{"status": "unavailable"}')
+        save_json "${CONFIG_DIR}/advanced/containerd.json" "$advanced_containerd" "ok"
 
-    # --- 6. Appearance ---
-    log "Appearance..."
-    local appearance
-    appearance=$(run_cmd "appearance" settings appearance get)
-    save_json "${CONFIG_DIR}/appearance.json" "$appearance" "ok"
+        # --- GPU ---
+        log ""
+        log "GPU settings..."
+        local gpu_mode
+        gpu_mode=$(run_cmd "gpu-mode" settings gpu mode get 2>/dev/null || echo '{"status": "unavailable"}')
+        save_json "${CONFIG_DIR}/gpu/mode.json" "$gpu_mode" "ok"
 
-    # --- 7. Advanced / Developer ---
-    log "Advanced settings..."
-    local advanced_env
-    advanced_env=$(run_cmd "advanced-env" settings advanced env list 2>/dev/null || echo '{"status": "unavailable"}')
-    save_json "${CONFIG_DIR}/advanced/env.json" "$advanced_env" "ok"
+        local gpu_apps
+        gpu_apps=$(run_cmd "gpu-apps" settings gpu apps list 2>/dev/null || echo '{"status": "unavailable"}')
+        save_json "${CONFIG_DIR}/gpu/apps.json" "$gpu_apps" "ok"
 
-    local advanced_containerd
-    advanced_containerd=$(run_cmd "advanced-containerd" settings advanced containerd get 2>/dev/null || echo '{"status": "unavailable"}')
-    save_json "${CONFIG_DIR}/advanced/containerd.json" "$advanced_containerd" "ok"
+        # --- Compute ---
+        log ""
+        log "Compute settings..."
+        local compute
+        compute=$(run_cmd "compute" settings compute list 2>/dev/null || echo '{"status": "unavailable"}')
+        save_json "${CONFIG_DIR}/compute/settings.json" "$compute" "ok"
 
-    # --- 8. GPU ---
-    log "GPU settings..."
-    local gpu_mode
-    gpu_mode=$(run_cmd "gpu-mode" settings gpu mode get 2>/dev/null || echo '{"status": "unavailable"}')
-    save_json "${CONFIG_DIR}/gpu/mode.json" "$gpu_mode" "ok"
+        # --- Video ---
+        log ""
+        log "Video settings..."
+        local video
+        video=$(run_cmd "video" settings video get 2>/dev/null || echo '{"status": "unavailable"}')
+        save_json "${CONFIG_DIR}/video/settings.json" "$video" "ok"
 
-    local gpu_apps
-    gpu_apps=$(run_cmd "gpu-apps" settings gpu apps list 2>/dev/null || echo '{"status": "unavailable"}')
-    save_json "${CONFIG_DIR}/gpu/apps.json" "$gpu_apps" "ok"
+        # --- Backup Plans ---
+        log ""
+        log "Backup plans..."
+        local backup_plans
+        backup_plans=$(run_cmd "backup-plans" settings backup plans list)
+        save_json "${CONFIG_DIR}/backup/plans.json" "$backup_plans" "ok"
 
-    # --- 9. Compute / Accelerator ---
-    log "Compute settings..."
-    local compute
-    compute=$(run_cmd "compute" settings compute list 2>/dev/null || echo '{"status": "unavailable"}')
-    save_json "${CONFIG_DIR}/compute/settings.json" "$compute" "ok"
+        # --- Restore Plans ---
+        log ""
+        log "Restore plans..."
+        local restore_plans
+        restore_plans=$(run_cmd "restore-plans" settings restore plans list 2>/dev/null || echo '{"status": "unavailable"}')
+        save_json "${CONFIG_DIR}/restore/plans.json" "$restore_plans" "ok"
+    fi
 
-    # --- 10. Video ---
-    log "Video settings..."
-    local video
-    video=$(run_cmd "video" settings video get 2>/dev/null || echo '{"status": "unavailable"}')
-    save_json "${CONFIG_DIR}/video/settings.json" "$video" "ok"
+    # --- Netzwerk-Kategorie ---
+    if [ "${EXPORT_NETWORK:-1}" = "1" ]; then
+        log ""
+        log "Network configuration..."
+        local rp_info
+        rp_info=$(run_cmd "reverse-proxy" settings network reverse-proxy get)
+        save_json "${CONFIG_DIR}/network/reverse-proxy.json" "$rp_info" "ok"
 
-    # --- 11. Backup Plans (Olares standard backup config) ---
-    log "Backup plans..."
-    local backup_plans
-    backup_plans=$(run_cmd "backup-plans" settings backup plans list)
-    save_json "${CONFIG_DIR}/backup/plans.json" "$backup_plans" "ok"
+        local overlay_status
+        overlay_status=$(run_cmd "overlay" settings network overlay status)
+        save_json "${CONFIG_DIR}/network/overlay.json" "$overlay_status" "ok"
+    fi
 
-    # --- 12. Restore Plans ---
-    log "Restore plans..."
-    local restore_plans
-    restore_plans=$(run_cmd "restore-plans" settings restore plans list 2>/dev/null || echo '{"status": "unavailable"}')
-    save_json "${CONFIG_DIR}/restore/plans.json" "$restore_plans" "ok"
+    # --- VPN-Kategorie ---
+    if [ "${EXPORT_VPN:-1}" = "1" ]; then
+        log ""
+        log "VPN configuration..."
+        local vpn_acl
+        vpn_acl=$(run_cmd "vpn-acl" settings vpn acl all)
+        save_json "${CONFIG_DIR}/vpn/acl.json" "$vpn_acl" "ok"
+    fi
 
-    # --- 13. App Settings (all installed apps) ---
-    log "App settings (all installed apps)..."
-    local apps_json
-    apps_json=$(run_cmd "market-list" market list --mine)
+    # --- App-Einstellungen ---
+    if [ "${EXPORT_APPS_CATEGORY:-1}" = "1" ]; then
+        log ""
+        log "App settings (installed apps)..."
+        local apps_json
+        apps_json=$(run_cmd "market-list" market list --mine)
 
-    local app_names
-    app_names=$(echo "$apps_json" | python3 -c "
+        local app_names
+        app_names=$(echo "$apps_json" | python3 -c "
 import json, sys
 try:
     data = json.load(sys.stdin)
@@ -265,31 +293,39 @@ except:
     pass
 " 2>/dev/null || echo "")
 
-    if [ -z "$app_names" ]; then
-        log_warn "Could not list apps"
-    else
-        local app_count=0
-        while IFS= read -r app; do
-            [ -z "$app" ] && continue
-            [[ "$app" == *"-shared" ]] && continue
+        if [ -z "$app_names" ]; then
+            log_warn "Could not list apps"
+        else
+            local app_count=0
+            while IFS= read -r app; do
+                [ -z "$app" ] && continue
+                [[ "$app" == *"-shared" ]] && continue
 
-            local app_dir="${CONFIG_DIR}/apps/${app}"
-            if ! $DRY_RUN; then
-                mkdir -p "$app_dir"
-            fi
+                if [ -n "${EXPORT_APPS:-}" ]; then
+                    local app_selected=""
+                    local sel
+                    for sel in ${EXPORT_APPS//,/ }; do
+                        if [ "$sel" = "$app" ]; then app_selected="1"; break; fi
+                    done
+                    [ -z "$app_selected" ] && continue
+                fi
 
-            local env_data
-            if env_data=$(run_cmd "app-env-${app}" settings apps env get "$app" 2>/dev/null); then
-                save_json "${app_dir}/env.json" "$env_data" "ok"
-            else
-                save_json "${app_dir}/env.json" '{}' "ok" "no env data"
-            fi
+                local app_dir="${CONFIG_DIR}/apps/${app}"
+                if ! $DRY_RUN; then
+                    mkdir -p "$app_dir"
+                fi
 
-            # Entrances ermitteln
-            local entrances_data entrance_names=""
-            if entrances_data=$(run_cmd "app-entrances-${app}" settings apps entrances list "$app" 2>/dev/null); then
-                save_json "${app_dir}/entrances.json" "$entrances_data" "ok"
-                entrance_names=$(echo "$entrances_data" | python3 -c "
+                local env_data
+                if env_data=$(run_cmd "app-env-${app}" settings apps env get "$app" 2>/dev/null); then
+                    save_json "${app_dir}/env.json" "$env_data" "ok"
+                else
+                    save_json "${app_dir}/env.json" '{}' "ok" "no env data"
+                fi
+
+                local entrances_data entrance_names=""
+                if entrances_data=$(run_cmd "app-entrances-${app}" settings apps entrances list "$app" 2>/dev/null); then
+                    save_json "${app_dir}/entrances.json" "$entrances_data" "ok"
+                    entrance_names=$(echo "$entrances_data" | python3 -c "
 import json, sys
 try:
     for e in json.load(sys.stdin):
@@ -299,42 +335,42 @@ try:
 except:
     pass
 " 2>/dev/null)
-            else
-                save_json "${app_dir}/entrances.json" '{}' "ok" "no entrances"
-            fi
+                else
+                    save_json "${app_dir}/entrances.json" '{}' "ok" "no entrances"
+                fi
 
-            # Domain + Policy pro Entrance (korrekte CLI-Syntax: <app> <entrance>)
-            if [ -z "$entrance_names" ]; then
-                save_json "${app_dir}/domain.json" '{"note":"no entrance"}' "ok"
-                save_json "${app_dir}/policy.json" '{"note":"no entrance"}' "ok"
-            else
-                local entrance
-                while IFS= read -r entrance; do
-                    [ -z "$entrance" ] && continue
-                    local domain_data policy_data
-                    if domain_data=$(run_cmd "app-domain-${app}-${entrance}" settings apps domain get "$app" "$entrance" 2>/dev/null); then
-                        save_json "${app_dir}/domain-${entrance}.json" "$domain_data" "ok"
-                    else
-                        save_json "${app_dir}/domain-${entrance}.json" '{}' "ok" "no domain"
-                    fi
-                    if policy_data=$(run_cmd "app-policy-${app}-${entrance}" settings apps policy get "$app" "$entrance" 2>/dev/null); then
-                        save_json "${app_dir}/policy-${entrance}.json" "$policy_data" "ok"
-                    else
-                        save_json "${app_dir}/policy-${entrance}.json" '{}' "ok" "no policy"
-                    fi
-                done <<< "$entrance_names"
-            fi
+                if [ -z "$entrance_names" ]; then
+                    save_json "${app_dir}/domain.json" '{"note":"no entrance"}' "ok"
+                    save_json "${app_dir}/policy.json" '{"note":"no entrance"}' "ok"
+                else
+                    local entrance
+                    while IFS= read -r entrance; do
+                        [ -z "$entrance" ] && continue
+                        local domain_data policy_data
+                        if domain_data=$(run_cmd "app-domain-${app}-${entrance}" settings apps domain get "$app" "$entrance" 2>/dev/null); then
+                            save_json "${app_dir}/domain-${entrance}.json" "$domain_data" "ok"
+                        else
+                            save_json "${app_dir}/domain-${entrance}.json" '{}' "ok" "no domain"
+                        fi
+                        if policy_data=$(run_cmd "app-policy-${app}-${entrance}" settings apps policy get "$app" "$entrance" 2>/dev/null); then
+                            save_json "${app_dir}/policy-${entrance}.json" "$policy_data" "ok"
+                        else
+                            save_json "${app_dir}/policy-${entrance}.json" '{}' "ok" "no policy"
+                        fi
+                    done <<< "$entrance_names"
+                fi
 
-            app_count=$((app_count + 1))
-        done <<< "$app_names"
-        log_ok "${app_count} apps exported"
+                app_count=$((app_count + 1))
+            done <<< "$app_names"
+            log_ok "${app_count} apps exported"
+        fi
     fi
 
     # --- Manifest ---
     log ""
     log "Creating manifest..."
     if ! $DRY_RUN; then
-        python3 << PYEOF 2>/dev/null || log_warn "Manifest creation failed"
+        python3 << INNERPY 2>/dev/null || log_warn "Manifest creation failed"
 import json, os, glob
 target_dir = '${CONFIG_DIR}'
 files = []
@@ -361,7 +397,7 @@ manifest = {
 with open(os.path.join(target_dir, 'manifest.json'), 'w') as f:
     json.dump(manifest, f, indent=2)
 print('Manifest: {} files, {}'.format(len(files), size_human))
-PYEOF
+INNERPY
     fi
 
     log ""
@@ -373,5 +409,6 @@ PYEOF
     fi
     log "============================================================"
 }
+
 
 main "$@"
