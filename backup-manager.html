@@ -599,6 +599,7 @@ tr:last-child td { border-bottom: none; }
       <div id="restore-apps-box" style="margin-top: 12px;">
         <p style="color: var(--text-dim);">Wähle zuerst einen Export, um die verfügbaren Apps zu laden.</p>
       </div>
+      <div id="restore-profile-ref"></div>
       <div class="btn-group" style="margin-top: 16px;">
         <button class="btn primary" onclick="doRestore()"> Ausgewählte Kategorien wiederherstellen</button>
       </div>
@@ -1100,6 +1101,8 @@ let restoreAppsSelected = [];
 function loadRestoreApps() {
   const date = document.getElementById('restore-date').value;
   const box = document.getElementById('restore-apps-box');
+  const profEl = document.getElementById('restore-profile-ref');
+  if (profEl) profEl.innerHTML = '';
   if (!date) {
     box.innerHTML = '<p style="color: var(--text-dim);">Wähle zuerst einen Export, um die verfügbaren Apps zu laden.</p>';
     return;
@@ -1130,6 +1133,35 @@ function loadRestoreApps() {
               </tr>`).join('')}
           </tbody>
         </table>
+      </div>
+    `;
+  });
+
+  // Gesichertes Profil als Referenz anzeigen (nicht automatisch wiederherstellbar)
+  apiGet(`/api/export/details/${date}`).then(d => {
+    if (!profEl) return;
+    const prof = d?.profile;
+    if (!prof || !Array.isArray(prof) || prof.length === 0) {
+      profEl.innerHTML = '';
+      return;
+    }
+    const p = prof[0];
+    profEl.innerHTML = `
+      <div class="card" style="margin-top: 16px;">
+        <div class="card-title"><span class="icon"></span> Gesichertes Profil (Referenz)</div>
+        <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+          ${p.avatar ? `<img src="${p.avatar}" alt="Avatar" style="width:56px;height:56px;border-radius:50%;object-fit:cover;">` : ''}
+          <div style="font-size:14px; line-height:1.8;">
+            <div><strong>Anzeigename:</strong> ${p.display_name || '—'}</div>
+            <div><strong>Bio:</strong> ${p.description || '—'}</div>
+            <div><strong>E-Mail:</strong> ${p.email || '—'}</div>
+            <div><strong>Konto:</strong> ${p.name || '—'}</div>
+          </div>
+        </div>
+        <p style="color: var(--warning); margin-top: 10px; font-size: 13px;">
+          Nur als Referenz gesichert — Olares bietet kein automatisches Zurücksetzen.
+          Profil manuell in den Olares-Einstellungen (Konto/Profil) wiederherstellen.
+        </p>
       </div>
     `;
   });

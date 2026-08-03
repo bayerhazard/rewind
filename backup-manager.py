@@ -146,11 +146,15 @@ def get_export_details(date_str):
     r = run_cmd(f"du -sh {CONFIG_DIR}/{date_str} 2>&1")
     config_size = r["stdout"].strip().split()[0] if r["success"] else "unknown"
 
+    # Gesichertes User-Profil (Referenz — nicht automatisch wiederherstellbar)
+    profile = read_export_json(date_str, "profile/profiles.json")
+
     return {
         "date": date_str,
         "config_manifest": config_manifest,
         "config_files": config_files[:50],
-        "config_size": config_size
+        "config_size": config_size,
+        "profile": profile
     }
 
 def list_export_apps(date_str):
