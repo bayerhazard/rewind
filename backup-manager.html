@@ -492,9 +492,7 @@ tr:last-child td { border-bottom: none; }
       <label style="font-weight: 600;">Sichern:</label>
       <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 6px;">
         <label style="font-size: 14px;"><input type="checkbox" class="export-cat" value="apps" checked onchange="toggleExportCategories()"> App-Einstellungen</label>
-        <label style="font-size: 14px;"><input type="checkbox" class="export-cat" value="network" checked onchange="toggleExportCategories()"> Netzwerk</label>
-        <label style="font-size: 14px;"><input type="checkbox" class="export-cat" value="vpn" checked onchange="toggleExportCategories()"> VPN</label>
-        <label style="font-size: 14px;"><input type="checkbox" class="export-cat" value="system" checked onchange="toggleExportCategories()"> System & Sprache</label>
+        <label style="font-size: 14px;"><input type="checkbox" class="export-cat" value="system" checked onchange="toggleExportCategories()"> Systemeinstellungen</label>
       </div>
     </div>
 
@@ -531,26 +529,11 @@ tr:last-child td { border-bottom: none; }
       <pre style="color: var(--text-dim); font-size: 13px; line-height: 1.8;">
 /Data/
 ├── 2026-08-02/
-│   ├── system/
-│   │   └── olares-info.json
-│   ├── network/
-│   │   ├── reverse-proxy.json
-│   │   └── overlay.json
-│   ├── vpn/
-│   │   └── acl.json
 │   ├── integration/
 │   │   └── accounts.json
 │   ├── users/
 │   │   └── role.json
 │   ├── appearance.json
-│   ├── advanced/
-│   │   ├── env.json
-│   │   └── containerd.json
-│   ├── gpu/
-│   │   ├── mode.json
-│   │   └── apps.json
-│   ├── compute/
-│   │   └── settings.json
 │   ├── video/
 │   │   └── settings.json
 │   ├── backup/
@@ -607,9 +590,7 @@ tr:last-child td { border-bottom: none; }
         <label style="font-weight: 600;">Wiederherstellen:</label>
         <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 6px;">
           <label style="font-size: 14px;"><input type="checkbox" class="restore-cat" value="apps" checked onchange="toggleRestoreCategories()"> App-Einstellungen</label>
-          <label style="font-size: 14px;"><input type="checkbox" class="restore-cat" value="network" onchange="toggleRestoreCategories()"> Netzwerk</label>
-          <label style="font-size: 14px;"><input type="checkbox" class="restore-cat" value="vpn" onchange="toggleRestoreCategories()"> VPN</label>
-          <label style="font-size: 14px;"><input type="checkbox" class="restore-cat" value="system" onchange="toggleRestoreCategories()"> System & Sprache</label>
+          <label style="font-size: 14px;"><input type="checkbox" class="restore-cat" value="system" onchange="toggleRestoreCategories()"> Systemeinstellungen</label>
         </div>
       </div>
       <div id="restore-apps-box" style="margin-top: 12px;">

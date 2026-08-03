@@ -167,8 +167,6 @@ def _run_export_background(apps=None, categories=None):
     # Kategorie-/App-Auswahl an das Skript durchreichen (Env-Vars)
     env = dict(os.environ)
     env["EXPORT_SYSTEM"] = "1" if categories is None or "system" in categories else "0"
-    env["EXPORT_NETWORK"] = "1" if categories is None or "network" in categories else "0"
-    env["EXPORT_VPN"] = "1" if categories is None or "vpn" in categories else "0"
     env["EXPORT_APPS_CATEGORY"] = "1" if categories is None or "apps" in categories else "0"
     env["EXPORT_APPS"] = ",".join(apps) if apps else ""
 
@@ -379,74 +377,10 @@ def perform_restore(date_str, categories=None, apps=None):
                 log_msg.append("")
                 if not _restore_app_settings(date_str, selected, log_msg):
                     all_success = False
-    # 3. Netzwerk (reverse-proxy + overlay)
-    if "network" in categories:
-        log_msg.append("")
-        log_msg.append("--- Netzwerk ---")
-        rp = read_export_json(date_str, "network/reverse-proxy.json")
-        if rp and isinstance(rp, dict):
-            if rp.get("enable_frp"):
-                cmd = f"{OLARES_CLI} settings network reverse-proxy set --mode frp"
-                if rp.get("frp_server"):
-                    cmd += f" --frp-server {rp['frp_server']}"
-                if rp.get("frp_auth_method"):
-                    cmd += f" --frp-auth-method {rp['frp_auth_method']}"
-                r = run_cmd(cmd, timeout=25)
-                log_msg.append(f"  {'OK' if r['success'] else 'WARN'}: reverse-proxy -> FRP")
-                if not r["success"]:
-                    all_success = False
-            elif rp.get("external_network_off"):
-                r = run_cmd(f"{OLARES_CLI} settings network reverse-proxy set --mode off", timeout=25)
-                log_msg.append(f"  {'OK' if r['success'] else 'WARN'}: reverse-proxy -> off")
-                if not r["success"]:
-                    all_success = False
-            else:
-                log_msg.append("  -- reverse-proxy: keine wiederherstellbare Konfiguration")
-        else:
-            log_msg.append("  -- kein network/reverse-proxy.json im Export")
-
-        ov = read_export_json(date_str, "network/overlay.json")
-        if ov and isinstance(ov, dict):
-            if ov.get("status") == "on":
-                r = run_cmd(f"{OLARES_CLI} settings network overlay enable", timeout=25)
-                log_msg.append(f"  {'OK' if r['success'] else 'WARN'}: overlay -> on")
-                if not r["success"]:
-                    all_success = False
-            else:
-                log_msg.append("  -- overlay: Status 'off' (Standard), nichts zu tun")
-        else:
-            log_msg.append("  -- kein network/overlay.json im Export")
-
-    # 4. VPN (ACL)
-    if "vpn" in categories:
-        log_msg.append("")
-        log_msg.append("--- VPN ---")
-        acl = read_export_json(date_str, "vpn/acl.json")
-        flags = []
-        if isinstance(acl, dict):
-            for proto in ("tcp", "udp", "any-proto"):
-                rules = acl.get(proto)
-                if isinstance(rules, list):
-                    for rule in rules:
-                        dst = None
-                        if isinstance(rule, dict):
-                            dst = rule.get("dst") or rule.get("target") or rule.get("destination")
-                        elif isinstance(rule, str):
-                            dst = rule
-                        if dst:
-                            flags.append(f"--{proto} {dst}")
-        if flags:
-            r = run_cmd(f"{OLARES_CLI} settings vpn acl set " + " ".join(flags), timeout=25)
-            log_msg.append(f"  {'OK' if r['success'] else 'WARN'}: VPN ACL ({len(flags)} Regeln)")
-            if not r["success"]:
-                all_success = False
-        else:
-            log_msg.append("  -- VPN ACL: keine setzbaren Regeln im Export")
-
-    # 5. System & Sprache (appearance language)
+    # 3. Systemeinstellungen (Systemsprache/Appearance)
     if "system" in categories:
         log_msg.append("")
-        log_msg.append("--- System & Sprache ---")
+        log_msg.append("--- Systemeinstellungen ---")
         appr = read_export_json(date_str, "appearance.json")
         if appr and isinstance(appr, dict) and appr.get("language"):
             lang = appr["language"]

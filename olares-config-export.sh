@@ -149,9 +149,9 @@ main() {
     log "============================================================"
 
     # Kategorie-Auswahl (Env-Vars, Default alle an)
-    # EXPORT_APPS_CATEGORY / EXPORT_NETWORK / EXPORT_VPN / EXPORT_SYSTEM = 1|0
+    # EXPORT_APPS_CATEGORY / EXPORT_SYSTEM = 1|0
     # EXPORT_APPS = kommagetrennte App-Liste (leer = alle Apps)
-    log "Kategorien: system=${EXPORT_SYSTEM:-1} network=${EXPORT_NETWORK:-1} vpn=${EXPORT_VPN:-1} apps=${EXPORT_APPS_CATEGORY:-1}"
+    log "Kategorien: system=${EXPORT_SYSTEM:-1} apps=${EXPORT_APPS_CATEGORY:-1}"
     if [ -n "${EXPORT_APPS:-}" ]; then
         log "Ausgewaehlte Apps: ${EXPORT_APPS}"
     fi
@@ -164,17 +164,6 @@ main() {
 
     # --- System-Kategorie ---
     if [ "${EXPORT_SYSTEM:-1}" = "1" ]; then
-        # --- 1. System Info ---
-        log ""
-        log "System info..."
-        local version_info
-        version_info=$(run_cmd "version" settings me version)
-        save_json "${CONFIG_DIR}/system/olares-info.json" "$version_info" "ok"
-
-        local me_info
-        me_info=$(run_cmd "whoami" settings me whoami)
-        save_json "${CONFIG_DIR}/system/whoami.json" "$me_info" "ok"
-
         # --- Integration Accounts ---
         log ""
         log "Integration accounts..."
@@ -195,35 +184,6 @@ main() {
         local appearance
         appearance=$(run_cmd "appearance" settings appearance get)
         save_json "${CONFIG_DIR}/appearance.json" "$appearance" "ok"
-
-        # --- Advanced / Developer ---
-        log ""
-        log "Advanced settings..."
-        local advanced_env
-        advanced_env=$(run_cmd "advanced-env" settings advanced env list 2>/dev/null || echo '{"status": "unavailable"}')
-        save_json "${CONFIG_DIR}/advanced/env.json" "$advanced_env" "ok"
-
-        local advanced_containerd
-        advanced_containerd=$(run_cmd "advanced-containerd" settings advanced containerd get 2>/dev/null || echo '{"status": "unavailable"}')
-        save_json "${CONFIG_DIR}/advanced/containerd.json" "$advanced_containerd" "ok"
-
-        # --- GPU ---
-        log ""
-        log "GPU settings..."
-        local gpu_mode
-        gpu_mode=$(run_cmd "gpu-mode" settings gpu mode get 2>/dev/null || echo '{"status": "unavailable"}')
-        save_json "${CONFIG_DIR}/gpu/mode.json" "$gpu_mode" "ok"
-
-        local gpu_apps
-        gpu_apps=$(run_cmd "gpu-apps" settings gpu apps list 2>/dev/null || echo '{"status": "unavailable"}')
-        save_json "${CONFIG_DIR}/gpu/apps.json" "$gpu_apps" "ok"
-
-        # --- Compute ---
-        log ""
-        log "Compute settings..."
-        local compute
-        compute=$(run_cmd "compute" settings compute list 2>/dev/null || echo '{"status": "unavailable"}')
-        save_json "${CONFIG_DIR}/compute/settings.json" "$compute" "ok"
 
         # --- Video ---
         log ""
@@ -247,27 +207,6 @@ main() {
         save_json "${CONFIG_DIR}/restore/plans.json" "$restore_plans" "ok"
     fi
 
-    # --- Netzwerk-Kategorie ---
-    if [ "${EXPORT_NETWORK:-1}" = "1" ]; then
-        log ""
-        log "Network configuration..."
-        local rp_info
-        rp_info=$(run_cmd "reverse-proxy" settings network reverse-proxy get)
-        save_json "${CONFIG_DIR}/network/reverse-proxy.json" "$rp_info" "ok"
-
-        local overlay_status
-        overlay_status=$(run_cmd "overlay" settings network overlay status)
-        save_json "${CONFIG_DIR}/network/overlay.json" "$overlay_status" "ok"
-    fi
-
-    # --- VPN-Kategorie ---
-    if [ "${EXPORT_VPN:-1}" = "1" ]; then
-        log ""
-        log "VPN configuration..."
-        local vpn_acl
-        vpn_acl=$(run_cmd "vpn-acl" settings vpn acl all)
-        save_json "${CONFIG_DIR}/vpn/acl.json" "$vpn_acl" "ok"
-    fi
 
     # --- App-Einstellungen ---
     if [ "${EXPORT_APPS_CATEGORY:-1}" = "1" ]; then
