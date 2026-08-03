@@ -191,6 +191,7 @@ try:
     if isinstance(data, list):
         for u in data:
             out.append({
+                'name': u.get('name', ''),
                 'display_name': u.get('display_name', ''),
                 'description': u.get('description', ''),
                 'email': u.get('email', ''),
