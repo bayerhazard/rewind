@@ -178,16 +178,35 @@ main() {
         users_me=$(run_cmd "users-me" settings users me)
         save_json "${CONFIG_DIR}/users/role.json" "$users_me" "ok"
 
-        # --- User-Profil (Anzeigename, Beschreibung, Avatar) ---
+        # --- User-Profil (nur Anzeigename, Beschreibung, E-Mail, Avatar) ---
         log ""
         log "User profile..."
-        local profile_data
+        local profile_data profile_json
         profile_data=$(run_cmd "user-profile" settings users list)
-        save_json "${CONFIG_DIR}/profile/users.json" "$profile_data" "ok"
+        profile_json=$(echo "$profile_data" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    out = []
+    if isinstance(data, list):
+        for u in data:
+            out.append({
+                'display_name': u.get('display_name', ''),
+                'description': u.get('description', ''),
+                'email': u.get('email', ''),
+                'avatar': u.get('avatar', '')
+            })
+    print(json.dumps(out, ensure_ascii=False))
+except:
+    pass
+" 2>/dev/null || echo '[]')
+        if [ -n "$profile_json" ]; then
+            save_json "${CONFIG_DIR}/profile/profiles.json" "$profile_json" "ok"
+        fi
 
-        # Avatar-Datei herunterladen (URL aus users.json, öffentlich auslieferbar)
+        # Avatar-Datei herunterladen (URL aus den gefilterten Profil-Daten)
         local avatar_url
-        avatar_url=$(echo "$profile_data" | python3 -c "
+        avatar_url=$(echo "$profile_json" | python3 -c "
 import json, sys
 try:
     data = json.load(sys.stdin)
