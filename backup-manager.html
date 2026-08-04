@@ -366,10 +366,12 @@ tr:hover td{background:color-mix(in oklab, var(--b-200) 35%, transparent)}
       </div>
       <p style="color: var(--text-dim); font-size: 13px; margin-top: 10px;">
         Apps wie <strong>LiteLLM</strong> speichern ihre Daten in der Olares-Citus-Postgres
-        (kein Datei-/Settings-Export möglich). Für die Wiederherstellung ist ein
-        Datenbank-Dump nötig — setze dazu die Env-Variable <code>REWIND_DB_DSN</code> im
-        rewind-Deployment (URI entspricht dem <code>DATABASE_URL</code>-Secret der App,
-        z.B. <code>postgresql://litellm:PASS@citus-master-svc.user-system-aimighty:5432/litellm</code>).
+        (kein Datei-/Settings-Export möglich). Sie werden deshalb über ein
+        <strong>Voll-DB-Backup</strong> gesichert: Ein Host-Cron
+        (<code>rewind-db-full-dump.timer</code>, täglich 03:30) erzeugt per
+        <code>pg_dumpall</code> einen Komplett-Dump aller Datenbanken unter
+        <code>/Data/rewind/db/full/&lt;datum&gt;/</code> — passwortfrei, wird vom
+        „Backup Data"-Plan mit erfasst. Restore = komplette DB zurück.
       </p>
     </div>
 
@@ -697,9 +699,11 @@ async function loadDbCoverage() {
   const cov = await apiGet('/api/db/coverage');
   const tbody = document.getElementById('db-coverage-table');
   const dbApps = Array.isArray(cov?.apps) ? cov.apps : [];
+  const dumps = Array.isArray(cov?.full_dumps) ? cov.full_dumps : [];
   const dsnSet = !!cov?.dsn_set;
+  const hasFull = dumps.some(d => d.has_dump);
 
-  if (dbApps.length === 0) {
+  if (dbApps.length === 0 && !hasFull) {
     tbody.innerHTML = '<tr><td colspan="4" style="color: var(--text-dim);">Keine DB-gestützten Apps erkannt.</td></tr>';
     return;
   }
@@ -710,9 +714,11 @@ async function loadDbCoverage() {
       : a.backend === 'sqlite'
         ? '<span class="tag info">SQLite</span>'
         : '<span class="tag info">DB</span>';
-    const coverage = dsnSet
-      ? '<span class="tag completed">Rewind-DB-Dump aktiv</span>'
-      : '<span class="tag stopped">Config reicht nicht — DSN fehlt</span>';
+    const coverage = hasFull
+      ? '<span class="tag completed">Voll-DB-Backup aktiv</span>'
+      : dsnSet
+        ? '<span class="tag completed">Rewind-DB-Dump aktiv</span>'
+        : '<span class="tag stopped">Config reicht nicht — kein DB-Backup</span>';
     return `<tr>
       <td><strong>${a.app}</strong></td>
       <td>${backend}</td>
@@ -720,6 +726,27 @@ async function loadDbCoverage() {
       <td style="font-family: var(--mono); font-size: 12px; color: var(--text-dim);" title="${(a.detail||'').replace(/"/g, '&quot;')}">${a.detail ? a.detail.slice(0,60) + (a.detail.length>60?'…':'') : '—'}</td>
     </tr>`;
   }).join('');
+
+  if (hasFull || dumps.length) {
+    tbody.innerHTML += `
+      <tr style="border-top: 1px solid var(--border-soft);">
+        <td colspan="4" style="padding-top: 12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <strong style="color: var(--success);"> Voll-DB-Backup (ganze Citus-DB)</strong>
+            <span class="tag completed">${dumps.length} Dump-Tag(e)</span>
+          </div>
+          <div style="margin-top: 8px; font-family: var(--mono); font-size: 12px; color: var(--text-dim);">
+            ${dumps.map(d => `<div style="padding: 2px 0;">${d.date} — ${d.size} — ${(d.files||[]).join(', ')}</div>`).join('')}
+          </div>
+          <p style="color: var(--text-dim); font-size: 12px; margin-top: 8px;">
+            Erzeugt vom Host-Cron (<code>rewind-db-full-dump.timer</code>, täglich 03:30) per
+            <code>pg_dumpall</code> — passwortfrei, sichert Rollen + alle Datenbanken.
+            <strong>Restore:</strong> Cluster-Apps stoppen, dann
+            <code>gunzip -c citus-full.sql.gz | psql -h 127.0.0.1 -U olares -d postgres</code> (als Superuser im citus-Pod).
+          </p>
+        </td>
+      </tr>`;
+  }
 }
 
 // --- Backups ---

@@ -227,6 +227,24 @@ def detect_db_apps():
             continue
     return result
 
+
+def get_full_db_dumps():
+    """Listet vom Host-Cron erzeugte Voll-DB-Backups (/Data/rewind/db/full/<datum>/)."""
+    base = f"{CONFIG_DIR}/rewind/db/full"
+    r = run_cmd(f"ls -1d {base}/20* 2>/dev/null | sort -r")
+    dates = [d.strip() for d in r["stdout"].strip().split("\n") if d.strip()] if r["success"] else []
+    result = []
+    for d in dates:
+        date = os.path.basename(d)
+        files_r = run_cmd(f"ls -1 {d}/ 2>/dev/null")
+        files = [f.strip() for f in files_r["stdout"].strip().split("\n") if f.strip()] if files_r["success"] else []
+        size_r = run_cmd(f"du -sh {d} 2>/dev/null")
+        size = size_r["stdout"].strip().split()[0] if size_r["success"] else "?"
+        result.append({"date": date, "files": files, "size": size,
+                       "has_dump": any("sql.gz" in f for f in files)})
+    return result
+
+
 # --- Export / Supplement Data ------------------------------------------------
 def get_export_dates():
     r = run_cmd(f"ls -1d {CONFIG_DIR}/20* 2>/dev/null | xargs -I{{}} basename {{}} | sort -r")
@@ -583,6 +601,7 @@ class BackupHandler(BaseHTTPRequestHandler):
                 self.send_json({
                     "apps": detect_db_apps(),
                     "dsn_set": bool(os.environ.get("REWIND_DB_DSN", "").strip()),
+                    "full_dumps": get_full_db_dumps(),
                 })
             elif path == "/api/export/dates":
                 self.send_json({"config": get_export_dates()})
