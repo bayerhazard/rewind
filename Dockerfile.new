@@ -1,8 +1,31 @@
+# ---- pg_client: extrahiert pg_dump/psql (+ Library-Closure) aus einem
+#      glibc-Debian-Trixie-Postgres-Image. Funktioniert ohne apt/Netz.
+FROM postgres:17-trixie AS pg_client
+RUN mkdir -p /opt/pg/bin /opt/pg/lib && \
+    cp /usr/lib/postgresql/17/bin/pg_dump /usr/lib/postgresql/17/bin/psql /opt/pg/bin/ && \
+    ldd /opt/pg/bin/pg_dump /opt/pg/bin/psql | awk '{print $3}' | grep -v '^$' | sort -u > /tmp/needed.txt && \
+    while :; do \
+      C=0; \
+      for L in $(cat /tmp/needed.txt); do \
+        for D in $(ldd "$L" 2>/dev/null | awk '{print $3}' | grep -v '^$'); do \
+          grep -qx "$D" /tmp/needed.txt || { echo "$D" >> /tmp/needed.txt; C=1; }; \
+        done; \
+      done; \
+      [ "$C" = "0" ] && break; \
+    done && \
+    sort -u /tmp/needed.txt | while read L; do [ -e "$L" ] && cp "$L" /opt/pg/lib/ || true; done
+
+# ---- final: Rewind-App + DB-Client
 FROM ghcr.io/bayerhazard/rewind:1.0.15
 WORKDIR /app
+COPY --from=pg_client /opt/pg/bin/pg_dump /opt/pg/bin/psql /usr/local/bin/
+COPY --from=pg_client /opt/pg/lib/ /opt/pg/lib/
+ENV LD_LIBRARY_PATH=/opt/pg/lib
+
 COPY backup-manager.html /app/backup-manager.html
 COPY backup-manager.py /app/backup-manager.py
 COPY logo.png /app/logo.png
 COPY olares-config-export.sh /app/olares-config-export.sh
+COPY olares-db-export.sh /app/olares-db-export.sh
 RUN chmod +x /app/*.sh
 CMD ["python3", "backup-manager.py", "--port", "8765"]

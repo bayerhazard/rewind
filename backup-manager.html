@@ -341,6 +341,36 @@ tr:hover td{background:color-mix(in oklab, var(--b-200) 35%, transparent)}
         <div class="stat-label">Letzter Config-Export</div>
         <div class="stat-value" id="ov-last-export">—</div>
       </div>
+      <div class="stat">
+        <div class="stat-label">Letzter DB-Export</div>
+        <div class="stat-value" id="ov-last-db-export">—</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 16px;">
+      <div class="card-title"><span class="icon"></span> Datenbank-Abdeckung (DB-gestützte Apps)</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>App</th>
+              <th>Backend</th>
+              <th>Abdeckung</th>
+              <th>DB-Dump im Export</th>
+            </tr>
+          </thead>
+          <tbody id="db-coverage-table">
+            <tr><td colspan="4" style="color: var(--text-dim);">Erkennung läuft...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="color: var(--text-dim); font-size: 13px; margin-top: 10px;">
+        Apps wie <strong>LiteLLM</strong> speichern ihre Daten in der Olares-Citus-Postgres
+        (kein Datei-/Settings-Export möglich). Für die Wiederherstellung ist ein
+        Datenbank-Dump nötig — setze dazu die Env-Variable <code>REWIND_DB_DSN</code> im
+        rewind-Deployment (URI entspricht dem <code>DATABASE_URL</code>-Secret der App,
+        z.B. <code>postgresql://litellm:PASS@citus-master-svc.user-system-aimighty:5432/litellm</code>).
+      </p>
     </div>
 
     <div class="card" style="margin-top: 16px;">
@@ -640,8 +670,56 @@ async function loadOverview() {
     lastExportEl.className = 'stat-value';
   }
 
+  // Last DB export
+  const lastDbEl = document.getElementById('ov-last-db-export');
+  if (exportStatus?.db && exportStatus.db.status === 'success') {
+    lastDbEl.textContent = exportStatus.db.timestamp.slice(0, 16).replace('T', ' ');
+    lastDbEl.className = 'stat-value success';
+  } else if (exportStatus?.db?.status === 'skipped') {
+    lastDbEl.textContent = 'Nicht konfiguriert';
+    lastDbEl.className = 'stat-value warning';
+  } else if (exportStatus?.db?.status === 'error') {
+    lastDbEl.textContent = 'Fehler';
+    lastDbEl.className = 'stat-value error';
+  } else {
+    lastDbEl.textContent = 'Noch nie';
+    lastDbEl.className = 'stat-value';
+  }
+
   // Backups content (Pläne + Config-Exporte) lives in the Overview tab now
   loadBackups();
+
+  // Datenbank-Abdeckung (DB-gestützte Apps wie LiteLLM)
+  loadDbCoverage();
+}
+
+async function loadDbCoverage() {
+  const cov = await apiGet('/api/db/coverage');
+  const tbody = document.getElementById('db-coverage-table');
+  const dbApps = Array.isArray(cov?.apps) ? cov.apps : [];
+  const dsnSet = !!cov?.dsn_set;
+
+  if (dbApps.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="color: var(--text-dim);">Keine DB-gestützten Apps erkannt.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = dbApps.map(a => {
+    const backend = a.backend === 'citus'
+      ? '<span class="tag info">Citus-Postgres</span>'
+      : a.backend === 'sqlite'
+        ? '<span class="tag info">SQLite</span>'
+        : '<span class="tag info">DB</span>';
+    const coverage = dsnSet
+      ? '<span class="tag completed">Rewind-DB-Dump aktiv</span>'
+      : '<span class="tag stopped">Config reicht nicht — DSN fehlt</span>';
+    return `<tr>
+      <td><strong>${a.app}</strong></td>
+      <td>${backend}</td>
+      <td>${coverage}</td>
+      <td style="font-family: var(--mono); font-size: 12px; color: var(--text-dim);" title="${(a.detail||'').replace(/"/g, '&quot;')}">${a.detail ? a.detail.slice(0,60) + (a.detail.length>60?'…':'') : '—'}</td>
+    </tr>`;
+  }).join('');
 }
 
 // --- Backups ---
@@ -727,6 +805,14 @@ async function viewExport(date) {
       <strong> Dateien:</strong>
       <pre style="color:var(--text-dim);font-size:12px;margin-top:8px;white-space:pre-wrap;">${(data.config_files || []).map(f => '  ' + f.replace('/Data/' + date + '/', '')).join('\n')}</pre>
     </div>
+    ${(data.db_files || []).length ? `
+      <div style="margin-top:16px;">
+        <strong> Datenbank-Dumps:</strong>
+        <pre style="color:var(--success);font-size:12px;margin-top:8px;white-space:pre-wrap;">${data.db_files.map(f => '  db/' + f).join('\n')}</pre>
+        <p style="color:var(--text-dim);font-size:12px;margin-top:6px;">
+          Wiederherstellung: App stoppen, dann <code>psql "$DSN" &lt; db/&lt;name&gt;.sql.gz</code> (bzw. <code>gunzip -c ... | psql "$DSN"</code>) in die gleiche Citus-Datenbank einspielen.
+        </p>
+      </div>` : ''}
     ${manifest.total_size_human ? `<div style="margin-top:12px;"><strong> Config-Größe:</strong> ${manifest.total_size_human}</div>` : ''}
   `;
 }

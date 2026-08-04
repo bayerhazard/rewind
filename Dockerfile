@@ -5,10 +5,15 @@ FROM ghcr.io/bayerhazard/rewind:1.0.15
 
 WORKDIR /app
 
+# pg_dump/psql für den DB-Export (DB-gestützte Apps wie LiteLLM) bereitstellen
+RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+      postgresql-client gzip >/dev/null 2>&1 && rm -rf /var/lib/apt/lists/*
+
 COPY backup-manager.py .
 COPY backup-manager.html .
 COPY logo.png .
 COPY olares-config-export.sh .
+COPY olares-db-export.sh .
 
 RUN chmod +x *.sh
 

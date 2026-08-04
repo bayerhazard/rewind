@@ -11,6 +11,7 @@ Usage:
 """
 
 import json
+import re
 import subprocess
 import sys
 import os
@@ -124,6 +125,108 @@ def get_apps():
         return apps if apps else []
     return []
 
+
+# --- DB-Backup-Erkennung ----------------------------------------------------
+# Apps wie LiteLLM speichern ihre Daten nicht in Settings/Dateien, sondern in
+# einer Datenbank (bei Olares: der geteilten Citus-Postgres). Solche Apps
+# erkennt Rewind über die Env-Variablen des App-Containers (*DATABASE_URL /
+# *DB_URL / *POSTGRES) und weist sie als "DB-gestützt" aus. Die Sicherung
+# dieser Datenbanken erfolgt über olares-db-export.sh (pg_dump) mit den in
+# REWIND_DB_DSN hinterlegten Credentials.
+DB_URL_ENV_RE = re.compile(r"(DATABASE|DB)[_A-Z]*URL|PGHOST|PGDATABASE|POSTGRES", re.I)
+DB_HOST_MARKERS = ("citus-master-svc", "citus", "postgres", "postgresql://")
+
+def _parse_env_table(text):
+    """Parst 'NAME VALUE FROM'-Zeilen der olares-cli container-env-Ausgabe
+    (Spalten sind leerzeichen-gepolstert, keine Tabs)."""
+    envs = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("NAME"):
+            continue
+        parts = line.split(None, 2)
+        if not parts:
+            continue
+        envs[parts[0]] = (parts[1] if len(parts) > 1 else "",
+                          parts[2] if len(parts) > 2 else "")
+    return envs
+
+def detect_db_apps():
+    """Erkennt installierte Apps, deren Daten in einer DB liegen (Citus/SQLite)."""
+    apps = get_apps()
+    app_names = set()
+    for a in apps:
+        name = a.get("name") or (a.get("metadata") or {}).get("name")
+        if name:
+            app_names.add(name)
+
+    wl_r = run_cmd(f"{OLARES_CLI} cluster workload list -o json")
+    workloads = {}
+    if wl_r["success"]:
+        data = parse_json(wl_r["stdout"])
+        for kind in (data or {}).get("kinds", []):
+            for it in kind.get("items", []):
+                md = it.get("metadata", {})
+                if it.get("kind") in ("Deployment", "StatefulSet"):
+                    workloads[md.get("name")] = md.get("namespace")
+
+    result = []
+    for name in sorted(app_names):
+        ns = workloads.get(name)
+        if not ns:
+            continue
+        try:
+            pod_r = run_cmd(f"{OLARES_CLI} cluster pod list -n {ns} -o json")
+            pods = (parse_json(pod_r["stdout"]) or {}).get("items", []) if pod_r["success"] else []
+            pod_name = None
+            for p in pods:
+                containers = [c.get("name") for c in (p.get("spec") or {}).get("containers", [])]
+                if name in containers or containers and all(c != "olares-envoy-sidecar" for c in containers):
+                    pod_name = p.get("metadata", {}).get("name")
+                    break
+            if not pod_name and pods:
+                pod_name = pods[0].get("metadata", {}).get("name")
+            if not pod_name:
+                continue
+
+            env_r = run_cmd(f"{OLARES_CLI} cluster container env {ns}/{pod_name} --container {name}")
+            envs = _parse_env_table(env_r["stdout"]) if env_r["success"] else {}
+
+            db_envs = {k: v for k, v in envs.items() if DB_URL_ENV_RE.search(k)}
+            backend = None
+            detail = ""
+            for k, (val, src) in db_envs.items():
+                low = (val or "").lower()
+                if "citus-master-svc" in low or "postgresql://" in low or "postgres" in low:
+                    backend = "citus"
+                    detail = f"{k}: {val[:120]}{'…' if len(val) > 120 else ''}"
+                    break
+                if "sqlite" in low or low.endswith(".db"):
+                    backend = "sqlite"
+                    detail = f"{k}: {val[:120]}"
+                    break
+                # Wert versteckt (Secret-Referenz): Name + Quelle reichen als Nachweis,
+                # dass die App ihre Daten in einer DB ablegt.
+                if (not val or val == "-") and src:
+                    backend = "db"
+                    detail = f"{k} → {src[:120]}"
+                    break
+            if db_envs and backend is None:
+                backend = "db"
+                detail = next(iter(db_envs.values()))[0][:120]
+
+            if backend:
+                result.append({
+                    "app": name,
+                    "ns": ns,
+                    "db_backed": True,
+                    "backend": backend,
+                    "detail": detail.replace("\n", " ").strip(),
+                })
+        except Exception:
+            continue
+    return result
+
 # --- Export / Supplement Data ------------------------------------------------
 def get_export_dates():
     r = run_cmd(f"ls -1d {CONFIG_DIR}/20* 2>/dev/null | xargs -I{{}} basename {{}} | sort -r")
@@ -146,6 +249,10 @@ def get_export_details(date_str):
     r = run_cmd(f"du -sh {CONFIG_DIR}/{date_str} 2>&1")
     config_size = r["stdout"].strip().split()[0] if r["success"] else "unknown"
 
+    # DB-Dumps (Citus/Postgres-App-Daten), z.B. /Data/<date>/db/<db>.sql.gz
+    r = run_cmd(f"ls -1 {CONFIG_DIR}/{date_str}/db/ 2>/dev/null")
+    db_files = [f.strip() for f in r["stdout"].strip().split("\n") if f.strip()] if r["success"] else []
+
     # Gesichertes User-Profil (Referenz — nicht automatisch wiederherstellbar)
     profile = read_export_json(date_str, "profile/profiles.json")
 
@@ -154,6 +261,7 @@ def get_export_details(date_str):
         "config_manifest": config_manifest,
         "config_files": config_files[:50],
         "config_size": config_size,
+        "db_files": db_files,
         "profile": profile
     }
 
@@ -177,6 +285,22 @@ def _run_export_background(apps=None, categories=None):
     # Lange Laufzeit (30+ olares-cli-Calls + Pro-App-Calls) — 15 Min Budget.
     r = run_cmd_with_env(cmd, env=env, timeout=900)
 
+    # DB-Dumps (Citus/Postgres) für DB-gestützte Apps wie LiteLLM.
+    # Läuft nur, wenn REWIND_DB_DSN gesetzt ist (sonst informativ übersprungen).
+    db_r = {"success": False, "stdout": "", "stderr": "DB-Export nicht ausgeführt"}
+    dsn = os.environ.get("REWIND_DB_DSN", "").strip()
+    if dsn:
+        env["REWIND_DB_DSN"] = dsn
+        db_cmd = "bash /app/olares-db-export.sh 2>&1"
+        db_r = run_cmd_with_env(db_cmd, env=env, timeout=900)
+    else:
+        db_r = {
+            "success": False,
+            "stdout": "",
+            "stderr": "REWIND_DB_DSN nicht gesetzt — DB-Export übersprungen "
+                      "(DB-gestützte Apps wie LiteLLM werden nur als Settings, nicht als Datenbank gesichert).",
+        }
+
     # Exporte dem Olares-Benutzer (UID 1000) zuordnen, damit sie in der
     # Olares Files GUI sichtbar sind (der Container läuft als root).
     run_cmd(f"chown -R 1000:1000 {CONFIG_DIR} 2>/dev/null || true")
@@ -198,6 +322,21 @@ def _run_export_background(apps=None, categories=None):
                 "output": (r["stderr"] or r["stdout"] or "Unknown error")[-500:]
             }
             last_export["status"] = "error"
+
+        if db_r["success"]:
+            last_export["db"] = {
+                "timestamp": datetime.now().isoformat(),
+                "date": timestamp,
+                "status": "success",
+                "output": (db_r["stdout"] or "")[-500:],
+            }
+        else:
+            last_export["db"] = {
+                "timestamp": datetime.now().isoformat(),
+                "date": timestamp,
+                "status": "skipped" if not dsn else "error",
+                "output": (db_r["stderr"] or db_r["stdout"] or "Unknown")[-500:],
+            }
 
 
 def run_cmd_with_env(command, env=None, timeout=60):
@@ -440,6 +579,11 @@ class BackupHandler(BaseHTTPRequestHandler):
                 self.send_json(get_backup_status())
             elif path == "/api/apps":
                 self.send_json(get_apps())
+            elif path == "/api/db/coverage":
+                self.send_json({
+                    "apps": detect_db_apps(),
+                    "dsn_set": bool(os.environ.get("REWIND_DB_DSN", "").strip()),
+                })
             elif path == "/api/export/dates":
                 self.send_json({"config": get_export_dates()})
             elif path.startswith("/api/export/details/"):
