@@ -137,6 +137,9 @@ body{
 /* ============================================================ Grid + Stat-Karten */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
 .grid-2{grid-template-columns:repeat(auto-fill,minmax(400px,1fr))}
+.stats-grid{grid-template-columns:repeat(4,1fr)}
+@media (max-width:1100px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:600px){.stats-grid{grid-template-columns:1fr}}
 
 .stat{
   background:linear-gradient(180deg, var(--surface2), var(--surface));
@@ -328,7 +331,7 @@ tr:hover td{background:color-mix(in oklab, var(--b-200) 35%, transparent)}
 
   <!-- Tab: Overview -->
   <div id="tab-overview" class="tab-content active">
-    <div class="grid">
+    <div class="grid stats-grid">
       <div class="stat">
         <div class="stat-label">Olares Version</div>
         <div class="stat-value info" id="ov-version">—</div>
@@ -348,35 +351,7 @@ tr:hover td{background:color-mix(in oklab, var(--b-200) 35%, transparent)}
     </div>
 
     <div class="card" style="margin-top: 16px;">
-      <div class="card-title"><span class="icon"></span> Datenbank-Abdeckung (DB-gestützte Apps)</div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>App</th>
-              <th>Backend</th>
-              <th>Abdeckung</th>
-              <th>DB-Dump im Export</th>
-            </tr>
-          </thead>
-          <tbody id="db-coverage-table">
-            <tr><td colspan="4" style="color: var(--text-dim);">Erkennung läuft...</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p style="color: var(--text-dim); font-size: 13px; margin-top: 10px;">
-        Apps wie <strong>LiteLLM</strong> speichern ihre Daten in der Olares-Citus-Postgres
-        (kein Datei-/Settings-Export möglich). Sie werden deshalb über ein
-        <strong>Voll-DB-Backup</strong> gesichert: Ein Host-Cron
-        (<code>rewind-db-full-dump.timer</code>, täglich 03:30) erzeugt per
-        <code>pg_dumpall</code> einen Komplett-Dump aller Datenbanken unter
-        <code>/Data/rewind/db/full/&lt;datum&gt;/</code> — passwortfrei, wird vom
-        „Backup Data"-Plan mit erfasst. Restore = komplette DB zurück.
-      </p>
-    </div>
-
-    <div class="card" style="margin-top: 16px;">
-      <div class="card-title"><span class="icon"></span> Olares Backup-Pläne</div>
+      <div class="card-title"><span class="icon"></span> Olares Export Pläne</div>
       <div class="table-wrap">
         <table>
           <thead>
@@ -396,9 +371,28 @@ tr:hover td{background:color-mix(in oklab, var(--b-200) 35%, transparent)}
     </div>
 
     <div class="card">
-      <div class="card-title"><span class="icon"></span> Config-Exporte</div>
+      <div class="card-title"><span class="icon"></span> Config Sicherungen</div>
       <div id="config-exports-list">
         <p style="color: var(--text-dim);">Lade Export-Liste...</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon"></span> Datenbank Sicherungen</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>App</th>
+              <th>Backend</th>
+              <th>Abdeckung</th>
+              <th>DB-Dump im Export</th>
+            </tr>
+          </thead>
+          <tbody id="db-coverage-table">
+            <tr><td colspan="4" style="color: var(--text-dim);">Erkennung läuft...</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -410,15 +404,6 @@ tr:hover td{background:color-mix(in oklab, var(--b-200) 35%, transparent)}
 
   <!-- Tab: Konfiguration -->
   <div id="tab-export" class="tab-content">
-    <div class="alert info">
-      <span></span>
-      <div>
-        <strong>Config-Export:</strong> Sammelt alle App-Settings, Network, VPN, Users, Integrations,
-        GPU, Compute und System-Configs. Die Dateien werden nach <code>/Data/&lt;datum&gt;/</code>
-        geschrieben und vom Olares "Backup Data"-Plan automatisch erfasst.
-      </div>
-    </div>
-
     <div style="margin-top: 16px;">
       <label style="font-weight: 600;">Sichern:</label>
       <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 6px;">
@@ -427,8 +412,15 @@ tr:hover td{background:color-mix(in oklab, var(--b-200) 35%, transparent)}
       </div>
     </div>
 
-    <div id="export-apps-box" style="margin-top: 12px;">
-      <p style="color: var(--text-dim);">Lade Apps...</p>
+    <div style="margin-top: 12px;">
+      <div onclick="toggleExportApps()" style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; padding: 6px 0;">
+        <span id="export-apps-arrow" style="color: var(--text-dim); font-size: 12px;">▾</span>
+        <label style="font-weight: 600; cursor: pointer;">Apps (<span id="export-apps-count">0</span>)</label>
+        <span style="font-size: 12px; color: var(--text-dim);">(aus- und einklappen)</span>
+      </div>
+      <div id="export-apps-box">
+        <p style="color: var(--text-dim);">Lade Apps...</p>
+      </div>
     </div>
 
     <div class="btn-group" style="margin-top: 16px;">
@@ -750,20 +742,43 @@ async function loadDbCoverage() {
             <strong style="color: var(--success);"> Voll-DB-Backup (ganze Citus-DB)</strong>
             <span class="tag completed">${dumps.length} Dump-Tag(e)</span>
           </div>
-          <div style="margin-top: 8px; font-family: var(--mono); font-size: 12px; color: var(--text-dim);">
-            ${dumps.map(d => `<div style="padding: 2px 0;">${d.date} — ${d.size} — ${(d.files||[]).join(', ')}</div>`).join('')}
-          </div>
-          <p style="color: var(--text-dim); font-size: 12px; margin-top: 8px;">
-            Erzeugt vom Host-Cron (<code>rewind-db-full-dump.timer</code>, täglich 03:30) — passwortfrei:
-            <code>pg_dumpall</code> (ganze Citus-DB, inkl. Rollen) + <code>kvrocks_data/</code> (Redis/RocksDB).
-            <strong>Restore:</strong> Cluster-Apps stoppen → Citus:
-            <code>gunzip -c citus-full.sql.gz | psql -h 127.0.0.1 -U olares -d postgres</code> (im citus-Pod);
-            kvrocks: <code>kvrocks-0</code> stoppen, <code>kvrocks_data/</code> nach
-            <code>/var/lib/kvrocks-data/</code> ersetzen, Pod starten.
-          </p>
         </td>
-      </tr>`;
+      </tr>
+      ${dumps.map(d => `
+        <tr class="dump-entry" style="cursor:pointer;" onclick="toggleDumpDetail(this)">
+          <td colspan="4" style="font-family: var(--mono); font-size: 12px; color: var(--text-dim); padding: 6px 12px;">
+            <span class="dump-arrow">▸</span> ${d.date} — ${d.size} — ${(d.files||[]).join(', ')}
+          </td>
+        </tr>
+        <tr class="dump-detail" style="display:none;">
+          <td colspan="4" style="padding: 2px 12px 14px 24px; color: var(--text-dim); font-size: 12px;">
+            <p style="margin-bottom: 8px;">
+              Apps wie <strong>LiteLLM</strong> speichern ihre Daten in der Olares-Citus-Postgres
+              (kein Datei-/Settings-Export möglich). Sie werden über ein <strong>Voll-DB-Backup</strong>
+              gesichert: Ein Host-Cron (<code>rewind-db-full-dump.timer</code>, täglich 03:30) erzeugt
+              passwortfrei per <code>pg_dumpall</code> einen Komplett-Dump aller Datenbanken (inkl. Rollen)
+              + <code>kvrocks_data/</code> (Redis/RocksDB) unter
+              <code>/Data/rewind/db/full/&lt;datum&gt;/</code> — wird vom „Backup Data"-Plan mit erfasst.
+            </p>
+            <p style="margin-bottom: 0;">
+              <strong>Restore (= komplette DB zurück):</strong> Cluster-Apps stoppen → Citus:
+              <code>gunzip -c citus-full.sql.gz | psql -h 127.0.0.1 -U olares -d postgres</code> (im citus-Pod);
+              kvrocks: <code>kvrocks-0</code> stoppen, <code>kvrocks_data/</code> nach
+              <code>/var/lib/kvrocks-data/</code> ersetzen, Pod starten.
+            </p>
+          </td>
+        </tr>`).join('')}
+    `;
   }
+}
+
+function toggleDumpDetail(row) {
+  const detail = row.nextElementSibling;
+  const arrow = row.querySelector('.dump-arrow');
+  if (!detail) return;
+  const open = detail.style.display !== 'none';
+  detail.style.display = open ? 'none' : '';
+  if (arrow) arrow.textContent = open ? '▸' : '▾';
 }
 
 // --- Backups ---
@@ -940,6 +955,8 @@ async function loadExportApps() {
   const apps = (Array.isArray(appsData) ? appsData : [])
     .map(a => (typeof a === 'string') ? a : (a.name || ''))
     .filter(Boolean);
+  const countEl = document.getElementById('export-apps-count');
+  if (countEl) countEl.textContent = apps.length;
   if (apps.length === 0) {
     box.innerHTML = '<p style="color: var(--text-dim);">Keine Apps gefunden.</p>';
     return;
@@ -947,7 +964,6 @@ async function loadExportApps() {
   exportAppsSelected = apps.slice();
   box.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-      <label style="font-weight:600;">Apps (${apps.length})</label>
       <span style="font-size:13px; color:var(--text-dim);">
         <a href="javascript:void(0)" onclick="selectAllExportApps(true)">Alle</a> ·
         <a href="javascript:void(0)" onclick="selectAllExportApps(false)">Keine</a>
@@ -965,6 +981,15 @@ async function loadExportApps() {
       </table>
     </div>
   `;
+}
+
+function toggleExportApps() {
+  const box = document.getElementById('export-apps-box');
+  const arrow = document.getElementById('export-apps-arrow');
+  if (!box) return;
+  const open = box.style.display !== 'none';
+  box.style.display = open ? 'none' : '';
+  if (arrow) arrow.textContent = open ? '▸' : '▾';
 }
 
 function selectAllExportApps(checked) {
