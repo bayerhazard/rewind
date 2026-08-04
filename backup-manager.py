@@ -157,15 +157,23 @@ def get_backup_status():
 
     if plans := result.get("plans", {}).get("backups", []):
         result["snapshots"] = {}
+        result["plan_counts"] = {}
         for plan in plans:
             plan_id = plan.get("id", "")
             plan_name = plan.get("name", "")
-            snap_r = run_cmd(f"{OLARES_CLI} settings backup snapshots list {plan_id} --limit 3 -o json")
+            snap_r = run_cmd(f"{OLARES_CLI} settings backup snapshots list {plan_id} --limit 100 -o json")
             if snap_r["success"]:
                 snaps = parse_json(snap_r["stdout"])
-                result["snapshots"][plan_name] = snaps.get("snapshots", []) if snaps else []
+                snaps = snaps.get("snapshots", []) if snaps else []
+                result["snapshots"][plan_name] = snaps
             else:
                 result["snapshots"][plan_name] = []
+            # Snapshot-Anzahl + geschätzte Behaltedauer (≈ 1 Snapshot/Tag)
+            cnt = len(result["snapshots"][plan_name])
+            result["plan_counts"][plan_name] = {
+                "count": cnt,
+                "retention_estimate_days": cnt if cnt > 0 else 0,
+            }
     return result
 
 def get_apps():

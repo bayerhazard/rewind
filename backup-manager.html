@@ -385,6 +385,7 @@ tr:hover td{background:color-mix(in oklab, var(--b-200) 35%, transparent)}
               <th>Quelle</th>
               <th>Größe</th>
               <th>Restore-Größe</th>
+              <th>Snapshots (Retention)</th>
               <th>Status</th>
               <th>Nächster Lauf</th>
             </tr>
@@ -769,6 +770,7 @@ async function loadDbCoverage() {
 async function loadBackups() {
   const backups = await apiGet('/api/backups');
   const plans = backups?.plans?.backups || [];
+  const counts = backups?.plan_counts || {};
 
   // Plans table
   const table = document.getElementById('backup-plans-table');
@@ -779,11 +781,16 @@ async function loadBackups() {
       ? new Date(plan.nextBackupTimestamp * 1000).toLocaleString('de-DE')
       : '—';
     const statusClass = plan.status === 'Completed' ? 'completed' : 'error';
+    const c = counts[plan.name];
+    const snapCell = c && c.count > 0
+      ? `<span class="tag info">${c.count} × tägl. ≈ ${c.retention_estimate_days} Tage</span>`
+      : '<span class="tag stopped">—</span>';
     return `<tr>
       <td><strong>${plan.name}</strong></td>
       <td><code>${plan.path}</code></td>
       <td>${size}</td>
       <td>${restoreSize}</td>
+      <td>${snapCell}</td>
       <td><span class="tag ${statusClass}">${plan.status}</span></td>
       <td>${nextBackup}</td>
     </tr>`;
