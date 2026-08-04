@@ -44,6 +44,56 @@ schedule_state = {
     "last_auto_local": None
 }
 
+# --- Aufbewahrung (Retention) ------------------------------------------------
+# Persistiert in /Data/rewind-config.json (= userspace .../Data/rewind/rewind-config.json),
+# damit auch der Host-Cron (Voll-DB-Backup) den Wert lesen kann.
+CONFIG_FILE = "/Data/rewind-config.json"
+RETENTION_DEFAULT_DAYS = 14
+
+retention_state = {"days": RETENTION_DEFAULT_DAYS}
+
+def _load_retention():
+    try:
+        with open(CONFIG_FILE, "r") as f:
+            cfg = json.load(f)
+        d = int(cfg.get("retention_days", RETENTION_DEFAULT_DAYS))
+        retention_state["days"] = d if 1 <= d <= 365 else RETENTION_DEFAULT_DAYS
+    except Exception:
+        retention_state["days"] = RETENTION_DEFAULT_DAYS
+
+def _save_retention():
+    try:
+        cfg = {}
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                cfg = json.load(f)
+        except Exception:
+            cfg = {}
+        cfg["retention_days"] = retention_state["days"]
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(cfg, f, indent=2)
+        # für Olares Files sichtbar
+        run_cmd(f"chown 1000:1000 {CONFIG_FILE} 2>/dev/null || true")
+    except Exception as e:
+        print(f"retention save failed: {e}", flush=True)
+
+def _prune_exports(days=None):
+    """Behält die neuesten `days` Config-Exporte (/Data/20*) und Voll-DB-Dumps (/Data/db/full/*)."""
+    if days is None:
+        days = retention_state.get("days", RETENTION_DEFAULT_DAYS)
+    if days <= 0:
+        return
+    for base, keep in ((f"{CONFIG_DIR}", days), (f"{CONFIG_DIR}/db/full", days)):
+        r = run_cmd(f"ls -1d {base}/20* 2>/dev/null")
+        if not r["success"]:
+            continue
+        dirs = sorted(d.strip() for d in r["stdout"].strip().split("\n") if d.strip())
+        for old in dirs[:-keep]:
+            run_cmd(f"rm -rf '{old}' 2>/dev/null || true")
+            print(f"retention: entfernt {old}", flush=True)
+
+_load_retention()
+
 last_export = {
     "config": None,
     "status": "idle"
@@ -323,6 +373,9 @@ def _run_export_background(apps=None, categories=None):
     # Exporte dem Olares-Benutzer (UID 1000) zuordnen, damit sie in der
     # Olares Files GUI sichtbar sind (der Container läuft als root).
     run_cmd(f"chown -R 1000:1000 {CONFIG_DIR} 2>/dev/null || true")
+
+    # Aufbewahrung: ältere als die konfigurierten Tage entfernen
+    _prune_exports()
 
     with export_lock:
         if r["success"] or "completed" in r["stdout"]:
@@ -616,6 +669,8 @@ class BackupHandler(BaseHTTPRequestHandler):
                 self.send_json(last_export)
             elif path == "/api/export/schedule":
                 self.send_json(schedule_state)
+            elif path == "/api/retention":
+                self.send_json({"days": retention_state.get("days", RETENTION_DEFAULT_DAYS)})
             elif path == "/":
                 html_path = "/app/backup-manager.html"
                 if os.path.exists(html_path):
@@ -691,8 +746,21 @@ class BackupHandler(BaseHTTPRequestHandler):
                     schedule_state["next_local"] = nxt.astimezone(SCHEDULE_TZ).isoformat()
                 self.send_json(schedule_state)
 
-            elif path == "/api/restore":
-                date_str = data.get("date", "")
+            elif path == "/api/retention":
+                try:
+                    d = int(data.get("days", 0))
+                except (TypeError, ValueError):
+                    d = 0
+                if not (1 <= d <= 365):
+                    self.send_json({"error": "Aufbewahrung muss zwischen 1 und 365 Tagen liegen"}, 400)
+                    return
+                with export_lock:
+                    retention_state["days"] = d
+                _save_retention()
+                _prune_exports(d)
+                self.send_json({"days": d})
+
+            elif path == "/api/restore":                date_str = data.get("date", "")
                 categories = data.get("categories")
                 apps = data.get("apps")
                 if not date_str:

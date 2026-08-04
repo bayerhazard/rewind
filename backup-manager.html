@@ -449,6 +449,20 @@ tr:hover td{background:color-mix(in oklab, var(--b-200) 35%, transparent)}
       </div>
     </div>
 
+    <div id="retention-box" style="margin-top: 12px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);">
+      <div style="font-weight: 600; margin-bottom: 8px;"> Aufbewahrung (Backups)</div>
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <label style="font-size: 13px;">Tage, die behalten werden:</label>
+        <input type="number" id="retention-days" value="14" min="1" max="365" step="1"
+               style="background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 14px; width: 80px;">
+        <button class="btn" id="btn-save-retention" onclick="saveRetention()"> Speichern</button>
+      </div>
+      <div id="retention-info" style="margin-top: 10px; font-size: 13px; color: var(--text-dim);">
+        Gilt für Config-Exporte (<code>/Data/&lt;datum&gt;/</code>) und Voll-DB-Backups
+        (<code>/Data/rewind/db/full/&lt;datum&gt;/</code>). Ältere werden automatisch gelöscht.
+      </div>
+    </div>
+
     <div class="card" style="margin-top: 20px;">
       <div class="card-title"><span class="icon"></span> Export-Protokoll</div>
       <div id="export-log" class="log">Noch keine Exporte gestartet. Klicke oben auf einen Export-Button.</div>
@@ -1033,6 +1047,28 @@ async function saveSchedule() {
   loadSchedule();
 }
 
+async function loadRetention() {
+  const inp = document.getElementById('retention-days');
+  if (!inp) return;
+  const r = await apiGet('/api/retention');
+  if (r && r.days) inp.value = r.days;
+}
+
+async function saveRetention() {
+  const inp = document.getElementById('retention-days');
+  const btn = document.getElementById('btn-save-retention');
+  const val = parseInt(inp?.value, 10);
+  if (btn) btn.disabled = true;
+  const res = await apiPost('/api/retention', { days: val });
+  if (res?.error) {
+    alert('Fehler: ' + res.error);
+  } else {
+    alert(`Aufbewahrung gespeichert: ${res.days} Tage. Ältere Backups wurden entfernt.`);
+  }
+  if (btn) btn.disabled = false;
+  loadRetention();
+}
+
 // --- Analysis ---
 async function doAnalysis() {
   const result = await apiGet('/api/analysis');
@@ -1256,6 +1292,7 @@ async function confirmRestore() {
 (async function init() {
   await loadOverview();
   await loadSchedule();
+  await loadRetention();
   await loadExportApps();
 
   // Auto-refresh alle 60 Sekunden
