@@ -760,7 +760,8 @@ class BackupHandler(BaseHTTPRequestHandler):
                 _prune_exports(d)
                 self.send_json({"days": d})
 
-            elif path == "/api/restore":                date_str = data.get("date", "")
+            elif path == "/api/restore":
+                date_str = data.get("date", "")
                 categories = data.get("categories")
                 apps = data.get("apps")
                 if not date_str:
