@@ -229,8 +229,9 @@ def detect_db_apps():
 
 
 def get_full_db_dumps():
-    """Listet vom Host-Cron erzeugte Voll-DB-Backups (/Data/rewind/db/full/<datum>/)."""
-    base = f"{CONFIG_DIR}/rewind/db/full"
+    """Listet vom Host-Cron erzeugte Voll-DB-Backups.
+    Container-/Data = userspace .../Data/rewind; der Host schreibt dorthin nach db/full/<datum>/."""
+    base = f"{CONFIG_DIR}/db/full"
     r = run_cmd(f"ls -1d {base}/20* 2>/dev/null | sort -r")
     dates = [d.strip() for d in r["stdout"].strip().split("\n") if d.strip()] if r["success"] else []
     result = []
