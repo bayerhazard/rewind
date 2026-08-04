@@ -679,19 +679,22 @@ async function loadOverview() {
     lastExportEl.className = 'stat-value';
   }
 
-  // Last DB export
+  // Last DB export — zeigt den letzten tatsächlichen Voll-DB-Dump vom Host-Cron
   const lastDbEl = document.getElementById('ov-last-db-export');
-  if (exportStatus?.db && exportStatus.db.status === 'success') {
+  const cov = await apiGet('/api/db/coverage');
+  const dumps = Array.isArray(cov?.full_dumps) ? cov.full_dumps : [];
+  const newestDump = dumps.find(d => d.has_dump);
+  if (newestDump) {
+    lastDbEl.textContent = newestDump.date;
+    lastDbEl.className = 'stat-value success';
+  } else if (exportStatus?.db && exportStatus.db.status === 'success') {
     lastDbEl.textContent = exportStatus.db.timestamp.slice(0, 16).replace('T', ' ');
     lastDbEl.className = 'stat-value success';
-  } else if (exportStatus?.db?.status === 'skipped') {
-    lastDbEl.textContent = 'Nicht konfiguriert';
-    lastDbEl.className = 'stat-value warning';
   } else if (exportStatus?.db?.status === 'error') {
     lastDbEl.textContent = 'Fehler';
     lastDbEl.className = 'stat-value error';
   } else {
-    lastDbEl.textContent = 'Noch nie';
+    lastDbEl.textContent = 'Noch nie (auto. 03:30)';
     lastDbEl.className = 'stat-value';
   }
 
