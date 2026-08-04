@@ -739,10 +739,12 @@ async function loadDbCoverage() {
             ${dumps.map(d => `<div style="padding: 2px 0;">${d.date} — ${d.size} — ${(d.files||[]).join(', ')}</div>`).join('')}
           </div>
           <p style="color: var(--text-dim); font-size: 12px; margin-top: 8px;">
-            Erzeugt vom Host-Cron (<code>rewind-db-full-dump.timer</code>, täglich 03:30) per
-            <code>pg_dumpall</code> — passwortfrei, sichert Rollen + alle Datenbanken.
-            <strong>Restore:</strong> Cluster-Apps stoppen, dann
-            <code>gunzip -c citus-full.sql.gz | psql -h 127.0.0.1 -U olares -d postgres</code> (als Superuser im citus-Pod).
+            Erzeugt vom Host-Cron (<code>rewind-db-full-dump.timer</code>, täglich 03:30) — passwortfrei:
+            <code>pg_dumpall</code> (ganze Citus-DB, inkl. Rollen) + <code>kvrocks_data/</code> (Redis/RocksDB).
+            <strong>Restore:</strong> Cluster-Apps stoppen → Citus:
+            <code>gunzip -c citus-full.sql.gz | psql -h 127.0.0.1 -U olares -d postgres</code> (im citus-Pod);
+            kvrocks: <code>kvrocks-0</code> stoppen, <code>kvrocks_data/</code> nach
+            <code>/var/lib/kvrocks-data/</code> ersetzen, Pod starten.
           </p>
         </td>
       </tr>`;
