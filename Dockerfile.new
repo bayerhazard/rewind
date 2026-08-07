@@ -18,9 +18,14 @@ RUN mkdir -p /opt/pg/bin /opt/pg/lib && \
 # ---- final: Rewind-App + DB-Client
 FROM ghcr.io/bayerhazard/rewind:1.0.15
 WORKDIR /app
+# Eingebackenes olares-cli-Profil strippen – Credentials gehören nicht ins Image.
+RUN rm -rf /root/.local/share/olares-cli /root/.olares-cli
 COPY --from=pg_client /opt/pg/bin/pg_dump /opt/pg/bin/psql /usr/local/bin/
 COPY --from=pg_client /opt/pg/lib/ /opt/pg/lib/
 ENV LD_LIBRARY_PATH=/opt/pg/lib
+# olares-cli-Profil auf dem persistenten /Data-Volume
+ENV HOME=/Data/olares-cli-home
+ENV OLARES_CLI_HOME=/Data/olares-cli-home
 
 COPY backup-manager.html /app/backup-manager.html
 COPY backup-manager.py /app/backup-manager.py

@@ -3,9 +3,8 @@ workloads:
     replicaCount: 1
 
 userspace:
-  appData:
-    path: /Data/Backup
-    permission: readWrite
+  appData: /Data
+  permission: readWrite
 
 olaresEnv: {}
 

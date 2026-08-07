@@ -254,14 +254,16 @@ tr:hover td{background:color-mix(in oklab, var(--b-200) 35%, transparent)}
   box-shadow:0 24px 60px -20px rgba(0,0,0,.6);
 }
 .modal h3{font-size:1.05rem;color:var(--text-stark);margin-bottom:1rem}
-.modal .form-group{margin-bottom:1rem}
-.modal label{display:block;font-size:.8rem;color:var(--text-dim);margin-bottom:6px}
-.modal select,.modal input{
+.modal .form-group,.form-group{margin-bottom:1rem}
+.modal label,label{display:block;font-size:.8rem;color:var(--text-dim);margin-bottom:6px}
+.modal select,.modal input,
+.form-group select,.form-group input{
   width:100%;padding:.55rem .7rem;
   background:var(--surface2);border:1px solid var(--border);
   border-radius:6px;color:var(--text);font-size:.85rem;
 }
-.modal select:focus,.modal input:focus{outline:none;border-color:var(--marke)}
+.modal select:focus,.modal input:focus,
+.form-group select:focus,.form-group input:focus{outline:none;border-color:var(--marke)}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:1.5rem}
 
 /* ============================================================ Alert */
@@ -320,7 +322,47 @@ tr:hover td{background:color-mix(in oklab, var(--b-200) 35%, transparent)}
         <div class="subtitle">Backup-Supplement für Olares One (Settings & DBs)</div>
       </div>
     </div>
+    <button class="btn" id="btn-logout" onclick="doLogout()" style="display:none;"> Abmelden</button>
   </div>
+
+  <!-- Login / Verbindung -->
+  <div id="login-screen" class="card">
+    <div class="card-title"><span class="icon"></span> Verbinde mit Olares</div>
+    <p style="color: var(--text-dim); margin-bottom: 14px;">
+      Rewind speichert keine Olares-Credentials. Verbinde das Konto dieser Installation
+      einmalig mit Olares-ID + Passwort (ggf. TOTP) oder einem Refresh-Token.
+      Das Profil wird auf dem persistenten Datenvolume abgelegt.
+    </p>
+    <div class="form-group">
+      <label>Olares ID (z. B. <code>aimighty@olares.de</code>)</label>
+      <input type="text" id="login-olares-id" placeholder="name@olares.de" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>Passwort</label>
+      <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <div class="form-group">
+      <label>TOTP-Code (nur wenn 2FA aktiv)</label>
+      <input type="text" id="login-totp" placeholder="optional">
+    </div>
+    <div style="display:flex; align-items:center; gap:10px; margin: 6px 0 12px;">
+      <span style="flex:1; border-top:1px solid var(--border-soft);"></span>
+      <span style="color: var(--text-dim); font-size:.8rem;">oder</span>
+      <span style="flex:1; border-top:1px solid var(--border-soft);"></span>
+    </div>
+    <div class="form-group">
+      <label>Refresh-Token (Alternative zum Passwort)</label>
+      <input type="password" id="login-refresh-token" placeholder="Optional – stattdessen Refresh-Token verwenden">
+    </div>
+    <div class="btn-group" style="margin-top: 12px;">
+      <button class="btn primary" id="btn-login" onclick="doLogin()"> Verbinden</button>
+      <button class="btn" onclick="document.getElementById('login-password').value='';document.getElementById('login-totp').value='';document.getElementById('login-refresh-token').value='';" > Eingaben löschen</button>
+    </div>
+    <div id="login-log" class="log" style="margin-top: 14px; display: none;"></div>
+  </div>
+
+  <!-- App-Inhalt (versteckt bis Verbindung) -->
+  <div id="app-content" class="hidden">
 
   <!-- Tabs -->
   <div class="tabs">
@@ -547,6 +589,7 @@ tr:hover td{background:color-mix(in oklab, var(--b-200) 35%, transparent)}
       <div id="restore-log" class="log">Noch kein Restore gestartet.</div>
     </div>
   </div>
+  </div><!-- /#app-content -->
 </div>
 
 <!-- Modal: Restore Confirm -->
@@ -1323,8 +1366,85 @@ async function confirmRestore() {
   }
 }
 
+// --- Auth / Verbindung ---
+async function checkAuth() {
+  const st = await apiGet('/api/auth/status');
+  return st || { connected: false };
+}
+
+function showLoggedIn() {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app-content').classList.remove('hidden');
+  document.getElementById('btn-logout').style.display = '';
+}
+
+function showLoginScreen(msg) {
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('app-content').classList.add('hidden');
+  document.getElementById('btn-logout').style.display = 'none';
+  if (msg) {
+    const log = document.getElementById('login-log');
+    log.style.display = '';
+    log.innerHTML = `<span class="line err"> ${msg}</span>`;
+  }
+}
+
+async function doLogin() {
+  const id = document.getElementById('login-olares-id').value.trim();
+  const password = document.getElementById('login-password').value;
+  const totp = document.getElementById('login-totp').value.trim();
+  const refresh_token = document.getElementById('login-refresh-token').value.trim();
+  const log = document.getElementById('login-log');
+  const btn = document.getElementById('btn-login');
+
+  if (!id) { alert('Bitte Olares ID eingeben.'); return; }
+  if (!password && !refresh_token) { alert('Bitte Passwort oder Refresh-Token eingeben.'); return; }
+
+  log.style.display = '';
+  log.innerHTML = '<span class="line">▶ Verbinde …</span>';
+  btn.disabled = true;
+
+  const result = await apiPost('/api/auth/login', {
+    olares_id: id, password: password || undefined,
+    totp: totp || undefined, refresh_token: refresh_token || undefined
+  });
+
+  if (result?.success) {
+    log.innerHTML = '<span class="line ok"> Verbunden!</span>\n' +
+      (result.log || []).map(l => `<span class="line"> ${l}</span>`).join('\n');
+    document.getElementById('login-password').value = '';
+    document.getElementById('login-totp').value = '';
+    document.getElementById('login-refresh-token').value = '';
+    await initApp();
+  } else {
+    log.innerHTML = `<span class="line err"> Fehler: ${result?.error || 'Login fehlgeschlagen'}</span>\n` +
+      (result?.log || []).map(l => `<span class="line"> ${l}</span>`).join('\n');
+  }
+  btn.disabled = false;
+}
+
+async function doLogout() {
+  if (!confirm('Von diesem Olares-Konto abmelden?')) return;
+  await apiPost('/api/auth/logout', {});
+  document.getElementById('login-log').style.display = 'none';
+  showLoginScreen();
+}
+
 // --- Init ---
 (async function init() {
+  const auth = await checkAuth();
+  if (auth.connected) {
+    showLoggedIn();
+    await initApp();
+  } else {
+    showLoginScreen();
+    const log = document.getElementById('login-log');
+    log.style.display = '';
+    log.innerHTML = `<span class="line warn"> ${(auth.error || 'Keine Verbindung konfiguriert.')}</span>`;
+  }
+})();
+
+async function initApp() {
   await loadOverview();
   await loadSchedule();
   await loadRetention();
@@ -1337,7 +1457,7 @@ async function confirmRestore() {
     if (activeTab?.dataset.tab === 'analysis') loadAnalysis();
     await loadSchedule();
   }, 60000);
-})();
+}
 </script>
 
 </body>

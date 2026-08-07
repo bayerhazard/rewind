@@ -12,6 +12,7 @@ Usage:
 
 import json
 import re
+import shlex
 import subprocess
 import sys
 import os
@@ -29,6 +30,15 @@ OLARES_CLI = "olares-cli"
 # /Data ist der Mount auf den Olares-Userspace (Data/rewind); Exporte liegen unter /Data/<datum>/
 BACKUP_DIR = "/Data"
 CONFIG_DIR = "/Data"
+
+# --- Olares-cli-Profil: persistiert pro Installation auf dem /Data-Volume -------
+# Keine Credentials im Image! Der Container bekommt HOME hierhin gesetzt, damit
+# olares-cli sein Profil (Tokens) auf dem persistenten Volume ablegt und die App
+# auf beliebigen Olares-One-Installationen funktioniert (Login im UI, kein
+# eingebackenes Profil).
+OLARES_HOME = os.environ.get("OLARES_CLI_HOME", "/Data/olares-cli-home")
+os.environ.setdefault("HOME", OLARES_HOME)
+os.makedirs(OLARES_HOME, exist_ok=True)
 
 # Zeitzone für die Uhrzeit-Eingabe (MEZ/MESZ = Europe/Berlin)
 SCHEDULE_TZ = ZoneInfo("Europe/Berlin")
@@ -182,6 +192,128 @@ def get_apps():
         apps = parse_json(r["stdout"])
         return apps if apps else []
     return []
+
+
+# --- Auth / Verbindung ------------------------------------------------------
+# Rewind speichert KEINE Olares-Credentials im Image. Stattdessen verbindet sich
+# die App über das UI mit dem Olares-Konto der Installation (Passwort+TOTP oder
+# Refresh-Token). Das olares-cli-Profil liegt auf dem persistenten /Data-Volume.
+def get_auth_status():
+    """Prüft, ob ein gültiges olares-cli-Profil konfiguriert ist.
+
+    connected == True  → Token vorhanden und Olares erreichbar
+    connected == False → kein Profil / Token invalidiert → UI zeigt Login-Screen
+    """
+    status = {"connected": False, "profile": None, "olares_id": None, "error": None}
+
+    r = run_cmd(f"{OLARES_CLI} profile list")
+    if not r["success"]:
+        status["error"] = r["stderr"].strip() or "olares-cli profile list failed"
+        return status
+
+    # Beispielausgabe:
+    #     NAME                OLARES-ID           STATUS       VERSION
+    # *   aimighty@olares.de  aimighty@olares.de  logged-in    1.12.6
+    profiles = []
+    for line in r["stdout"].splitlines():
+        if not line.strip() or line.startswith("NAME"):
+            continue
+        parts = line.split()
+        if not parts:
+            continue
+        current = parts[0].startswith("*")
+        # Spalte 0 kann '*' enthalten (aktuelles Profil); NAME == OLARES-ID
+        if current:
+            name = parts[1] if len(parts) > 1 else ""
+            st = parts[3] if len(parts) > 3 else "unknown"
+        else:
+            name = parts[0]
+            st = parts[2] if len(parts) > 2 else "unknown"
+        olares_id = name
+        profiles.append({"name": name, "olares_id": olares_id, "status": st, "current": current})
+        if current:
+            status["profile"] = {"name": name, "olares_id": olares_id, "status": st}
+            status["olares_id"] = olares_id
+
+    if not status["profile"]:
+        status["error"] = "No olares-cli profile configured"
+        return status
+
+    # Token wirklich testen (invalidated/expired → whoami schlägt fehl)
+    w = run_cmd(f"{OLARES_CLI} settings me whoami")
+    if w["success"]:
+        status["connected"] = True
+        status["error"] = None
+    else:
+        status["connected"] = False
+        status["error"] = w["stderr"].strip() or "Olares not reachable"
+    return status
+
+
+def do_login(olares_id, password=None, totp=None, refresh_token=None):
+    """Richtet das olares-cli-Profil auf dem persistenten Volume ein.
+
+    Entweder Passwort (+ optional TOTP) oder Refresh-Token. Existierende
+    Profile werden vorher entfernt (kann sonst 'already authenticated' werfen).
+    """
+    log_lines = []
+    olares_id = (olares_id or "").strip()
+    if not olares_id:
+        return {"success": False, "error": "Olares-ID fehlt", "log": log_lines}
+
+    # Altes (evtl. invalidertes) Profil entfernen
+    rm = run_cmd(f"{OLARES_CLI} profile remove {shlex.quote(olares_id)}")
+    if rm["success"] or "not found" in rm["stderr"].lower():
+        log_lines.append("Altes Profil entfernt / kein Profil vorhanden.")
+    else:
+        log_lines.append(f"Hinweis: profile remove: {rm['stderr'].strip()}")
+
+    if refresh_token:
+        cmd = [OLARES_CLI, "profile", "import", "--olares-id", olares_id,
+               "--refresh-token", refresh_token, "--no-switch"]
+        log_lines.append("Importiere Profil via Refresh-Token …")
+    else:
+        if not password:
+            return {"success": False, "error": "Passwort oder Refresh-Token fehlt", "log": log_lines}
+        cmd = [OLARES_CLI, "profile", "login", "--olares-id", olares_id, "--password-stdin"]
+        if totp:
+            cmd += ["--totp", str(totp).strip()]
+        log_lines.append("Logge ein via Passwort" + (" + TOTP" if totp else "") + " …")
+
+    try:
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=120,
+            input=(password or "") + "\n" if not refresh_token else None,
+        )
+        ok = proc.returncode == 0
+        out = (proc.stdout or "").strip()
+        err = (proc.stderr or "").strip()
+        if out:
+            log_lines.append(out[-400:])
+        if err:
+            log_lines.append(err[-400:])
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Login Timeout (120s)", "log": log_lines}
+    except Exception as e:
+        return {"success": False, "error": f"Login Fehler: {e}", "log": log_lines}
+
+    if not ok:
+        return {"success": False, "error": err or "Login fehlgeschlagen", "log": log_lines}
+
+    # Token verifizieren
+    w = run_cmd(f"{OLARES_CLI} settings me whoami")
+    if not w["success"]:
+        return {"success": False, "error": w["stderr"].strip() or "Olares nicht erreichbar", "log": log_lines}
+
+    log_lines.append("Verbindung hergestellt – Olares erreichbar.")
+    return {"success": True, "olares_id": olares_id, "log": log_lines}
+
+
+def do_logout():
+    st = get_auth_status()
+    if st.get("profile"):
+        run_cmd(f"{OLARES_CLI} profile remove {shlex.quote(st['profile']['olares_id'])}")
+    return {"success": True, "message": "Abgemeldet"}
 
 
 # --- DB-Backup-Erkennung ----------------------------------------------------
@@ -435,6 +567,9 @@ def run_cmd_with_env(command, env=None, timeout=60):
 
 
 def trigger_export(apps=None, categories=None):
+    st = get_auth_status()
+    if not st.get("connected"):
+        return {"status": "error", "error": "Olares nicht verbunden — bitte zuerst im UI einloggen (Olares-ID + Passwort/TOTP oder Refresh-Token).", "message": st.get("error") or "Not connected"}
     with export_lock:
         current = last_export.get("config")
         if current and current.get("status") == "running":
@@ -655,6 +790,8 @@ class BackupHandler(BaseHTTPRequestHandler):
         try:
             if path == "/api/status":
                 self.send_json(get_olares_status())
+            elif path == "/api/auth/status":
+                self.send_json(get_auth_status())
             elif path == "/api/backups":
                 self.send_json(get_backup_status())
             elif path == "/api/apps":
@@ -735,6 +872,18 @@ class BackupHandler(BaseHTTPRequestHandler):
                     return
                 self.send_json(trigger_export(apps, cats))
 
+            elif path == "/api/auth/login":
+                result = do_login(
+                    data.get("olares_id", ""),
+                    password=data.get("password"),
+                    totp=data.get("totp"),
+                    refresh_token=data.get("refresh_token"),
+                )
+                self.send_json(result, 200 if result.get("success") else 401)
+
+            elif path == "/api/auth/logout":
+                self.send_json(do_logout())
+
             elif path == "/api/export/schedule":
                 t = (data.get("time") or "").strip()
                 import re
@@ -792,6 +941,8 @@ def main():
 
     server = ThreadingHTTPServer(("0.0.0.0", args.port), BackupHandler)
 
+    # olares-cli-Profil auf dem persistenten Volume ablegen (kein Image-Embed)
+    os.makedirs(OLARES_HOME, exist_ok=True)
     # Bestehende Exporte dem Olares-Benutzer zuordnen (Sichtbarkeit in Files GUI)
     run_cmd(f"chown -R 1000:1000 {CONFIG_DIR} 2>/dev/null || true")
 
@@ -805,6 +956,7 @@ def main():
     print("=" * 60)
     print(f"  Server: http://0.0.0.0:{args.port}")
     print(f"  Backup dir: {BACKUP_DIR}")
+    print(f"  olares-cli HOME: {OLARES_HOME}")
     print("=" * 60)
 
     try:

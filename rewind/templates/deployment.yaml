@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: rewind
-          image: ghcr.io/bayerhazard/rewind:1.3.15
+          image: ghcr.io/bayerhazard/rewind:26.08.2
           imagePullPolicy: Always
           ports:
             - containerPort: 8765
@@ -26,11 +26,15 @@ spec:
           env:
             - name: EXPORT_SCHEDULE
               value: {{ .Values.exportSchedule | default "03:00" | quote }}
+            - name: HOME
+              value: /Data/olares-cli-home
+            - name: OLARES_CLI_HOME
+              value: /Data/olares-cli-home
           volumeMounts:
             - name: appdata
               mountPath: /Data
       volumes:
         - name: appdata
           hostPath:
-            path: /olares/rootfs/userspace/pvc-userspace-aimighty-yxce0cmwdzqtayox/Data/rewind
+            path: {{ .Values.userspace.appData }}
             type: DirectoryOrCreate

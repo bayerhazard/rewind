@@ -2,7 +2,7 @@ name: Publish Image
 on:
   push:
     branches: [master, main]
-    paths: ['Dockerfile', 'backup-manager.py', 'backup-manager.html', 'olares-config-export.sh', 'olares-db-export.sh', '.github/workflows/publish.yml']
+    paths: ['Dockerfile', 'Dockerfile.new', 'backup-manager.py', 'backup-manager.html', 'logo.png', 'olares-config-export.sh', 'olares-db-export.sh', 'rewind/Chart.yaml', '.github/workflows/publish.yml']
   workflow_dispatch:
 
 permissions:
@@ -22,11 +22,18 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract chart version
+        id: version
+        run: |
+          VERSION=$(grep '^version:' rewind/Chart.yaml | awk '{print $2}' | tr -d "'")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Rewind chart version: $VERSION"
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
+            ghcr.io/bayerhazard/rewind:${{ steps.version.outputs.version }}
             ghcr.io/bayerhazard/rewind:ci-${{ github.sha }}
             ghcr.io/bayerhazard/rewind:ci-latest
