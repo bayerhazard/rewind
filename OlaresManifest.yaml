@@ -10,11 +10,10 @@ metadata:
   appid: rewind
   icon: https://github.com/bayerhazard/rewind/raw/master/logo.png
   title: Rewind
-  version: 1.0.2
+  version: '26.08.1'
   categories:
     - Utilities
-    - Developer Tools
-  description: Backup Solution for Olares One
+  description: Configuration-level backup & restore for Olares One
   fullDescription: >
     Rewind complements the Olares standard backup by exporting app settings,
     network configs, VPN settings, integration accounts, GPU/compute settings,
@@ -30,7 +29,7 @@ metadata:
     - amd64
 
 spec:
-  versionName: '1.0.2'
+  versionName: '26.08.1'
   fullDescription: >
     Rewind complements the Olares standard backup by exporting app settings,
     network configs, VPN settings, integration accounts, GPU/compute settings,
