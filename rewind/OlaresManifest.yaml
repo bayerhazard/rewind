@@ -10,7 +10,7 @@ metadata:
   appid: rewind
   icon: https://github.com/bayerhazard/rewind/raw/master/logo.png
   title: Rewind
-  version: '26.08.2'
+  version: '26.08.3'
   categories:
     - Utilities
   description: Configuration-level backup & restore for Olares One
@@ -19,7 +19,7 @@ metadata:
     network configs, VPN settings, integration accounts, GPU/compute settings,
     and PostgreSQL database dumps.
     All exports are written to /Data/Backup/
-  upgradeDescription: "v26.08.2: Portabler Login-Flow — keine Olares-Credentials im Image; Verbindung über das UI (Olares-ID + Passwort/TOTP oder Refresh-Token), Profil auf dem persistenten /Data-Volume. v26.08.1: Unified naming — category Utilities, English descriptions. Built for Olares 1.12.6. v1.3.15: Letzter DB-Export zeigt echten Voll-DB-Dump; v1.3.14: GUI aufgeraeumt; v1.3.12: konfigurierbare Aufbewahrung; v1.3.8-11: DB-Backup (Voll-DB + kvrocks); v1.3.4/5/6/7: Design + Profil + no-cache; v1.3.3: User-Profil-Backup."
+  upgradeDescription: "v26.08.3: Login-Flow fix — nach erfolgreicher Verbindung wird automatisch zur Rewind-GUI gewechselt. v26.08.2: Portabler Login-Flow — keine Olares-Credentials im Image; Verbindung über das UI (Olares-ID + Passwort/TOTP oder Refresh-Token), Profil auf dem persistenten /Data-Volume. v26.08.1: Unified naming — category Utilities, English descriptions. Built for Olares 1.12.6. v1.3.15: Letzter DB-Export zeigt echten Voll-DB-Dump; v1.3.14: GUI aufgeraeumt; v1.3.12: konfigurierbare Aufbewahrung; v1.3.8-11: DB-Backup (Voll-DB + kvrocks); v1.3.4/5/6/7: Design + Profil + no-cache; v1.3.3: User-Profil-Backup."
   developer: Aimighty
   website: ''
   sourceCode: https://github.com/bayerhazard/rewind
@@ -29,13 +29,13 @@ metadata:
     - amd64
 
 spec:
-  versionName: '26.08.2'
+  versionName: '26.08.3'
   fullDescription: >
     Rewind complements the Olares standard backup by exporting app settings,
     network configs, VPN settings, integration accounts, GPU/compute settings,
     and PostgreSQL database dumps.
     All exports are written to /Data/Backup/
-  upgradeDescription: "v26.08.2: Portabler Login-Flow — keine Olares-Credentials im Image; Verbindung über das UI (Olares-ID + Passwort/TOTP oder Refresh-Token), Profil auf dem persistenten /Data-Volume. v26.08.1: Unified naming — category Utilities, English descriptions. Built for Olares 1.12.6. v1.3.15: Letzter DB-Export zeigt echten Voll-DB-Dump; v1.3.14: GUI aufgeraeumt; v1.3.12: konfigurierbare Aufbewahrung; v1.3.8-11: DB-Backup (Voll-DB + kvrocks); v1.3.4/5/6/7: Design + Profil + no-cache; v1.3.3: User-Profil-Backup."
+  upgradeDescription: "v26.08.3: Login-Flow fix — nach erfolgreicher Verbindung wird automatisch zur Rewind-GUI gewechselt. v26.08.2: Portabler Login-Flow — keine Olares-Credentials im Image; Verbindung über das UI (Olares-ID + Passwort/TOTP oder Refresh-Token), Profil auf dem persistenten /Data-Volume. v26.08.1: Unified naming — category Utilities, English descriptions. Built for Olares 1.12.6. v1.3.15: Letzter DB-Export zeigt echten Voll-DB-Dump; v1.3.14: GUI aufgeraeumt; v1.3.12: konfigurierbare Aufbewahrung; v1.3.8-11: DB-Backup (Voll-DB + kvrocks); v1.3.4/5/6/7: Design + Profil + no-cache; v1.3.3: User-Profil-Backup."
   developer: Aimighty
   website: ''
   sourceCode: https://github.com/bayerhazard/rewind

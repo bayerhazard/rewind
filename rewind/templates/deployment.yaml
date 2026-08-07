@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: rewind
-          image: ghcr.io/bayerhazard/rewind:26.08.2
+          image: ghcr.io/bayerhazard/rewind:26.08.3
           imagePullPolicy: Always
           ports:
             - containerPort: 8765

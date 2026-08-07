@@ -1415,6 +1415,7 @@ async function doLogin() {
     document.getElementById('login-password').value = '';
     document.getElementById('login-totp').value = '';
     document.getElementById('login-refresh-token').value = '';
+    showLoggedIn();
     await initApp();
   } else {
     log.innerHTML = `<span class="line err"> Fehler: ${result?.error || 'Login fehlgeschlagen'}</span>\n` +
